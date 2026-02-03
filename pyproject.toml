@@ -1,0 +1,32 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "pf_liquidity_risk"
+version = "0.0.1"
+description = "A data-driven liquidity risk assessment and cash-flow simulation for a $20M+ highly leveraged real estate PF project, analyzing DSCR and equity runway under occupancy delays."
+authors = [
+  { name = "Minsung Kim" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License"
+]
+requires-python = "~=3.10.0"
+
+
+[tool.ruff]
+line-length = 99
+src = ["pf_liquidity_risk"]
+include = ["pyproject.toml", "pf_liquidity_risk/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["pf_liquidity_risk"]
+force-sort-within-sections = true
+
