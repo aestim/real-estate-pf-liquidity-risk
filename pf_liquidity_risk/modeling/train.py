@@ -34,22 +34,24 @@ class PFInvestmentModel:
         principal = self.cfg.senior_loan
         revenue_history: List[float] = []
 
-        # Sampling interest rates for each phase at the start of the path
-        rates = {
-            "construction": np.random.triangular(*self.cfg.pre_completion_rate),
-            "stabilization": np.random.triangular(*self.cfg.stabilization_rate),
-            "exit": np.random.triangular(*self.cfg.post_court_rate)
-        }
+        # Sample rates
+        pre_refi_rate = np.random.triangular(*self.cfg.pre_refi_rate)
+        post_refi_rate = np.random.triangular(*self.cfg.post_refi_rate)
+        
+        # Penalty rate if refinancing fails but project continues
+        penalty_rate = pre_refi_rate * 1.2  # 20% higher than original
 
-        # Sampling long-term performance targets
         sampled_stab_rev = np.random.triangular(*self.cfg.stabilization_revenue_dist)
         sampled_post_rev = np.random.triangular(*self.cfg.post_court_revenue_dist)
 
-        # Construction delay logic (Triangular delay in months)
         completion_month = self.cfg.completion_target_month + int(
             np.random.triangular(0, 2, 6)
         )
         delay = max(0, completion_month - self.cfg.completion_target_month)
+        
+        # Track refinancing status
+        refinanced = False
+        current_rate = pre_refi_rate
 
         for m in range(1, self.cfg.exit_month + 1):
             # Phase determination
@@ -62,53 +64,53 @@ class PFInvestmentModel:
 
             revenue_history.append(revenue)
 
-            # Monthly interest calculation
-            monthly_rate = rates[phase] / 12
+            # Interest rate logic
+            monthly_rate = current_rate / 12
             interest = principal * monthly_rate
             cap_ratio = self.cfg.capitalized_ratio_map[phase]
 
             paid_interest = interest * (1 - cap_ratio)
-            principal += (interest * cap_ratio)  # Debt inflation via capitalization
+            principal += (interest * cap_ratio)
 
             # Operating Cash Flow & Principal Sweep
             net_cash_flow = revenue - (self.cfg.monthly_fixed_cost + paid_interest)
             
             if net_cash_flow > 0:
-                # Use surplus to pay down debt (Cash Sweep)
                 principal -= net_cash_flow
                 if principal < 0:
                     equity += abs(principal)
                     principal = 0
             else:
-                # Deficit reduces equity buffer
                 equity += net_cash_flow
 
-            # Impact of construction delays on equity
+            # Construction delay impact
             if m == completion_month and delay > 0:
                 equity -= delay * self.cfg.monthly_fixed_cost * 0.6
 
-            # Insolvency Check: Immediate default if equity wiped out
+            # Insolvency Check
             if equity <= 0:
                 return {"status": "default", "month": m, "final_equity": 0, "irr": -1.0}
 
             # Refinancing Viability Check (Month 24)
             if m == self.cfg.court_opening_month:
                 ltv_limit = np.random.triangular(*self.cfg.target_refi_ltv_dist)
-                # Income Approach: Using 6-month rolling NOI for market valuation
                 rolling_noi = np.mean(revenue_history[-6:]) if len(revenue_history) >= 6 else np.mean(revenue_history)
                 implied_val = (rolling_noi * 12) / self.cfg.cap_rate
                 
-                # Failure if current debt exceeds bank's LTV limit
                 if principal > (implied_val * ltv_limit):
+                    # Refinancing failed
                     return {"status": "refi_fail", "month": m, "final_equity": 0, "irr": -1.0}
+                else:
+                    # Refinancing succeeded - switch to lower rate
+                    refinanced = True
+                    current_rate = post_refi_rate
 
-            # Final Exit Transaction (Month 36)
+            # Final Exit Transaction
             if m == self.cfg.exit_month:
                 final_val = (revenue * 12) / self.cfg.cap_rate
                 exit_cost = final_val * np.random.uniform(*self.cfg.exit_cost_range)
                 exit_equity = final_val - principal - exit_cost
 
-                # Calculate Equity IRR (annualized)
                 if exit_equity > 0:
                     total_return = exit_equity / self.cfg.initial_equity
                     years = m / 12

@@ -34,10 +34,9 @@ class PFConfig:
     court_opening_month: int = 24
     exit_month: int = 36
 
-    # Interest Rates (Min, Mode, Max) per Project Phase
-    pre_completion_rate: Tuple[float, float, float] = (0.10, 0.14, 0.18)
-    stabilization_rate: Tuple[float, float, float] = (0.08, 0.11, 0.14)
-    post_court_rate: Tuple[float, float, float] = (0.05, 0.07, 0.09)
+    # Interest Rates (Min, Mode, Max) per Financing Stage
+    pre_refi_rate: Tuple[float, float, float] = (0.10, 0.14, 0.18)  # Before refinancing
+    post_refi_rate: Tuple[float, float, float] = (0.05, 0.07, 0.09)  # After refinancing
 
     # Refinancing & Exit Constraints
     target_refi_ltv_dist: Tuple[float, float, float] = (0.70, 0.80, 0.85)
