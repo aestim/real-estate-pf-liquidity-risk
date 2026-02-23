@@ -1,60 +1,20 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from dataclasses import dataclass, field
-from typing import Dict, Tuple, List
+from typing import Dict, List
+from pathlib import Path
+
+# Import config model (no circular dependency)
+from pf_liquidity_risk.modeling.config_model import PFConfig
 from pf_liquidity_risk.config import FIGURES_DIR
 
-# ==========================================
-# PF Investment Model Configuration
-# ==========================================
-
-@dataclass
-class PFConfig:
-    """
-    Configuration for Real Estate PF Investment Monte Carlo Simulation.
-    Encapsulates all financial parameters and stochastic distributions.
-    """
-
-    # Capital Structure (KRW)
-    initial_equity: float = 5_600_000_000
-    senior_loan: float = 19_000_000_000
-
-    # Operating Costs (KRW)
-    monthly_fixed_cost: float = 100_000_000
-
-    # Monthly Revenue Distributions (Min, Mode, Max)
-    # Modeled as triangular distributions to reflect occupancy and market rent uncertainty.
-    stabilization_revenue_dist: Tuple[float, float, float] = (50e6, 120e6, 150e6)
-    post_court_revenue_dist: Tuple[float, float, float] = (120e6, 200e6, 250e6)
-    
-    # Capitalization rate for Income Approach valuation
-    cap_rate: float = 0.055
-
-    # Timeline (Months)
-    completion_target_month: int = 16
-    court_opening_month: int = 24
-    exit_month: int = 36
-
-    # Interest Rates (Min, Mode, Max) per Project Phase
-    pre_completion_rate: Tuple[float, float, float] = (0.10, 0.14, 0.18)
-    stabilization_rate: Tuple[float, float, float] = (0.08, 0.11, 0.14)
-    post_court_rate: Tuple[float, float, float] = (0.05, 0.07, 0.09)
-
-    # Internal mapping for interest capitalization ratios
-    # Defined in __post_init__ to avoid type check errors with default values.
-    capitalized_ratio_map: Dict[str, float] = field(init=False)
-
-    def __post_init__(self):
-        self.capitalized_ratio_map = {
-            "construction": 1.0,   # Full interest capitalization during building
-            "stabilization": 0.4,  # Partial capitalization during ramp-up
-            "exit": 0.0            # No capitalization post-exit/court-opening
-        }
-
-    # Refinancing & Exit Constraints
-    target_refi_ltv_dist: Tuple[float, float, float] = (0.70, 0.80, 0.85)
-    exit_cost_range: Tuple[float, float] = (0.01, 0.02) # Transaction costs (1-2%)
+# Import public config by default - can be overridden for internal use
+try:
+    from pf_liquidity_risk.configs import private_config as config_module
+    print("[CONFIG] Using private configuration (real data)")
+except ImportError:
+    from pf_liquidity_risk.configs import public_config as config_module
+    print("[CONFIG] Using public configuration (normalized data)")
 
 
 # ==========================================
@@ -108,7 +68,7 @@ class PFInvestmentModel:
             cap_ratio = self.cfg.capitalized_ratio_map[phase]
 
             paid_interest = interest * (1 - cap_ratio)
-            principal += (interest * cap_ratio) # Debt inflation via capitalization
+            principal += (interest * cap_ratio)  # Debt inflation via capitalization
 
             # Operating Cash Flow & Principal Sweep
             net_cash_flow = revenue - (self.cfg.monthly_fixed_cost + paid_interest)
@@ -129,18 +89,18 @@ class PFInvestmentModel:
 
             # Insolvency Check: Immediate default if equity wiped out
             if equity <= 0:
-                return {"status": "default", "month": m, "final_equity": 0}
+                return {"status": "default", "month": m, "final_equity": 0, "irr": -1.0}
 
             # Refinancing Viability Check (Month 24)
             if m == self.cfg.court_opening_month:
                 ltv_limit = np.random.triangular(*self.cfg.target_refi_ltv_dist)
                 # Income Approach: Using 6-month rolling NOI for market valuation
-                rolling_noi = np.mean(revenue_history[-6:])
+                rolling_noi = np.mean(revenue_history[-6:]) if len(revenue_history) >= 6 else np.mean(revenue_history)
                 implied_val = (rolling_noi * 12) / self.cfg.cap_rate
                 
                 # Failure if current debt exceeds bank's LTV limit
                 if principal > (implied_val * ltv_limit):
-                    return {"status": "refi_fail", "month": m, "final_equity": 0}
+                    return {"status": "refi_fail", "month": m, "final_equity": 0, "irr": -1.0}
 
             # Final Exit Transaction (Month 36)
             if m == self.cfg.exit_month:
@@ -148,85 +108,181 @@ class PFInvestmentModel:
                 exit_cost = final_val * np.random.uniform(*self.cfg.exit_cost_range)
                 exit_equity = final_val - principal - exit_cost
 
-                # Calculate Equity IRR
-                irr = (exit_equity / self.cfg.initial_equity) ** (12 / m) - 1 if exit_equity > 0 else -1.0
+                # Calculate Equity IRR (annualized)
+                if exit_equity > 0:
+                    total_return = exit_equity / self.cfg.initial_equity
+                    years = m / 12
+                    irr = (total_return ** (1 / years)) - 1
+                else:
+                    irr = -1.0
+                
                 return {
                     "status": "exit",
                     "month": m,
                     "final_equity": max(0, exit_equity),
-                    "irr": irr
+                    "irr": irr,
+                    "exit_multiple": exit_equity / self.cfg.initial_equity if exit_equity > 0 else 0
                 }
 
-        return {"status": "survived_no_exit", "month": self.cfg.exit_month, "final_equity": equity}
+        return {"status": "survived_no_exit", "month": self.cfg.exit_month, "final_equity": equity, "irr": 0.0}
 
 
 # ==========================================
 # Execution & Visualization
 # ==========================================
 
-def run_simulation(iterations: int = 30000, seed: int = 42):
+def run_simulation(iterations: int = 30000, seed: int = 42, config: PFConfig = None):
     """Executes the Monte Carlo simulation engine across specified iterations."""
     np.random.seed(seed)
-    cfg = PFConfig()
-    model = PFInvestmentModel(cfg)
+    
+    if config is None:
+        config = config_module.get_config()
+    
+    model = PFInvestmentModel(config)
     results = [model.simulate_path() for _ in range(iterations)]
-    return pd.DataFrame(results), cfg
+    return pd.DataFrame(results), config
 
-def plot_enhanced_results(df: pd.DataFrame, iterations: int, filename: str):
+
+def plot_enhanced_results(df: pd.DataFrame, iterations: int, config: PFConfig, filename: str):
     """
     Generates an analytical dashboard and saves it to the reports/figures directory.
     Uses semantic color mapping for project status.
     """
     plt.style.use("seaborn-v0_8-muted")
-    fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+    fig, axes = plt.subplots(2, 2, figsize=(18, 12))
+    axes = axes.flatten()
 
     # Semantic Color Map for professional risk reporting
     color_map = {
         "exit": "#2ECC71",           # Success - Green
         "default": "#E74C3C",        # Bankruptcy - Red
-        "refi_fail": "#F1C40F",       # Liquidity Failure - Yellow/Orange
+        "refi_fail": "#F1C40F",      # Liquidity Failure - Yellow/Orange
         "survived_no_exit": "#3498DB" # Partial - Blue
     }
 
     # 1. Outcome Distribution
     counts = df["status"].value_counts()
     colors = [color_map.get(s, "#BDC3C7") for s in counts.index]
-    counts.plot(kind="bar", ax=axes[0], color=colors)
-    axes[0].set_title("Project Outcome Distribution", fontweight='bold')
+    counts.plot(kind="bar", ax=axes[0], color=colors, edgecolor='black')
+    axes[0].set_title("Project Outcome Distribution", fontweight='bold', fontsize=12)
     axes[0].set_ylabel("Frequency")
-    plt.setp(axes[0].get_xticklabels(), rotation=0)
+    axes[0].set_xlabel("")
+    plt.setp(axes[0].get_xticklabels(), rotation=45, ha='right')
+    
+    # Add percentage labels
+    for i, (idx, val) in enumerate(counts.items()):
+        axes[0].text(i, val, f'{val/iterations*100:.1f}%', 
+                    ha='center', va='bottom', fontweight='bold')
 
     # 2. Equity IRR Histogram
-    if "irr" in df.columns:
-        exit_df = df[df["status"] == "exit"]
-        if not exit_df.empty:
-            exit_df["irr"].plot(kind="hist", bins=50, ax=axes[1], color='#3498DB', alpha=0.7)
-            median_irr = exit_df["irr"].median()
-            axes[1].axvline(median_irr, color='red', linestyle='--', label=f'Median: {median_irr:.1%}')
-            axes[1].set_title("Equity IRR Distribution (Exits Only)", fontweight='bold')
-            axes[1].legend()
+    exit_df = df[df["status"] == "exit"]
+    if not exit_df.empty:
+        exit_df["irr"].plot(kind="hist", bins=50, ax=axes[1], 
+                           color='#3498DB', alpha=0.7, edgecolor='black')
+        median_irr = exit_df["irr"].median()
+        mean_irr = exit_df["irr"].mean()
+        axes[1].axvline(median_irr, color='red', linestyle='--', 
+                       linewidth=2, label=f'Median: {median_irr:.1%}')
+        axes[1].axvline(mean_irr, color='green', linestyle='--', 
+                       linewidth=2, label=f'Mean: {mean_irr:.1%}')
+        axes[1].set_title("Equity IRR Distribution (Exit Cases)", fontweight='bold', fontsize=12)
+        axes[1].set_xlabel("IRR")
+        axes[1].set_ylabel("Frequency")
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
 
-    # 3. Dynamic Survival Curve
+    # 3. Survival Curve
     months = np.arange(1, 37)
     survival_rates = []
     for m in months:
-        # Paths that have NOT failed (default or refi_fail) by month m
-        failed_so_far = df[df["status"].isin(["default", "refi_fail"]) & (df["month"] <= m)]
-        survival_rates.append((iterations - len(failed_so_far)) / iterations)
+        failed = df[df["status"].isin(["default", "refi_fail"]) & (df["month"] <= m)]
+        survival_rates.append((iterations - len(failed)) / iterations)
     
-    axes[2].plot(months, survival_rates, marker='o', markersize=3, color='#8E44AD')
+    axes[2].plot(months, survival_rates, marker='o', markersize=4, 
+                linewidth=2, color='#8E44AD')
+    axes[2].fill_between(months, 0, survival_rates, alpha=0.3, color='#8E44AD')
     axes[2].set_ylim(0, 1.05)
-    axes[2].set_title("Project Survival Rate Over Time", fontweight='bold')
+    axes[2].set_title("Project Survival Rate Over Time", fontweight='bold', fontsize=12)
     axes[2].set_xlabel("Month")
+    axes[2].set_ylabel("Survival Rate")
     axes[2].grid(True, alpha=0.3)
+    axes[2].axhline(y=0.95, color='red', linestyle='--', alpha=0.5)
+    axes[2].text(1, 0.96, '95% Threshold', fontsize=9)
+
+    # 4. Exit Multiple Distribution
+    if not exit_df.empty and "exit_multiple" in exit_df.columns:
+        exit_df["exit_multiple"].plot(kind="hist", bins=40, ax=axes[3], 
+                                      color='#27AE60', alpha=0.7, edgecolor='black')
+        median_mult = exit_df["exit_multiple"].median()
+        axes[3].axvline(median_mult, color='red', linestyle='--', 
+                       linewidth=2, label=f'Median: {median_mult:.2f}x')
+        axes[3].axvline(1.0, color='orange', linestyle=':', 
+                       linewidth=2, label='Break-even (1.0x)')
+        axes[3].set_title("Exit Multiple Distribution", fontweight='bold', fontsize=12)
+        axes[3].set_xlabel("Multiple (Exit Equity / Initial Equity)")
+        axes[3].set_ylabel("Frequency")
+        axes[3].legend()
+        axes[3].grid(True, alpha=0.3)
 
     plt.tight_layout()
     
-    # Save the figure to the specified path
+    # Save the figure
     save_path = FIGURES_DIR / filename
-    plt.savefig(save_path, dpi=300)
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     print(f"\n[Visual] Visualization saved to: {save_path}")
-    plt.show()
+    plt.close()
+
+
+def print_summary_table(df: pd.DataFrame, config: PFConfig):
+    """Print comprehensive risk analysis summary"""
+    exit_df = df[df["status"] == "exit"]
+    
+    print("\n" + "="*70)
+    print(f"    STOCHASTIC PF RISK ANALYSIS REPORT ({config.config_type})")
+    print("="*70)
+    
+    print(f"\n[Configuration: {config.config_type}]")
+    print("-" * 70)
+    print(f"  Initial Equity       : {config.initial_equity:>12.2f} {config.display_currency}")
+    print(f"  Senior Loan          : {config.senior_loan:>12.2f} {config.display_currency}")
+    print(f"  Initial LTV          : {config.senior_loan/(config.senior_loan+config.initial_equity):>12.2%}")
+    print(f"  Leverage Ratio       : {config.senior_loan/config.initial_equity:>12.2f}x")
+    
+    print("\n[Outcome Probabilities]")
+    print("-" * 70)
+    for status, count in df["status"].value_counts().items():
+        prob = count / len(df) * 100
+        print(f"  {status:20s}: {prob:>6.2f}% ({count:>6,} cases)")
+    
+    print("\n[Return Metrics - Exit Cases Only (n={:,})]".format(len(exit_df)))
+    print("-" * 70)
+    if not exit_df.empty:
+        print(f"  Mean IRR             : {exit_df['irr'].mean():>8.2%}")
+        print(f"  Median IRR           : {exit_df['irr'].median():>8.2%}")
+        print(f"  Std Dev IRR          : {exit_df['irr'].std():>8.2%}")
+        print(f"  25th Percentile      : {exit_df['irr'].quantile(0.25):>8.2%}")
+        print(f"  75th Percentile      : {exit_df['irr'].quantile(0.75):>8.2%}")
+        if "exit_multiple" in exit_df.columns:
+            print(f"  Mean Exit Multiple   : {exit_df['exit_multiple'].mean():>8.2f}x")
+            print(f"  Median Exit Multiple : {exit_df['exit_multiple'].median():>8.2f}x")
+    
+    print("\n[Risk Metrics]")
+    print("-" * 70)
+    loss = config.initial_equity - df["final_equity"]
+    car_95 = np.percentile(loss, 95)
+    car_99 = np.percentile(loss, 99)
+    expected_loss = loss.mean()
+    
+    print(f"  Expected Loss        : {expected_loss/config.initial_equity:>8.2%} of equity")
+    print(f"  95% VaR (CaR)        : {car_95/config.initial_equity:>8.2%} of equity")
+    print(f"  99% VaR (CaR)        : {car_99/config.initial_equity:>8.2%} of equity")
+    
+    # Sharpe Ratio (for exit cases)
+    if len(exit_df) > 0 and exit_df["irr"].std() > 0:
+        sharpe = exit_df["irr"].mean() / exit_df["irr"].std()
+        print(f"  Sharpe Ratio         : {sharpe:>8.2f}")
+    
+    print("\n" + "="*70)
 
 
 def main():
@@ -234,25 +290,23 @@ def main():
     Orchestration point: Define scenario parameters, run simulation, and trigger reporting.
     """
     iterations = 30000
-    output_image = "pf_liquidity_analysis_v1.png"
+    output_image = "pf_liquidity_analysis_v2.png"
 
+    # Load configuration
+    config = config_module.get_config()
+    
     # Execution
-    df, cfg = run_simulation(iterations)
+    print(f"\n[START] Running {iterations:,} Monte Carlo iterations...")
+    df, cfg = run_simulation(iterations, config=config)
     
-    # Risk Reporting (CLI Output)
-    print("\n" + "="*45)
-    print("    STOCHASTIC PF RISK ANALYSIS REPORT")
-    print("="*45)
-    print("\n[Outcome Probabilities]")
-    print(df["status"].value_counts(normalize=True))
-    
-    # Quantifying Capital at Risk (CaR)
-    loss = cfg.initial_equity - df["final_equity"]
-    car_95 = np.percentile(loss, 95)
-    print(f"\n[Value at Risk] 95% Capital at Risk: {car_95/1e9:.2f} B KRW")
+    # Risk Reporting
+    print_summary_table(df, cfg)
     
     # Generate Dashboard
-    plot_enhanced_results(df, iterations, filename=output_image)
+    plot_enhanced_results(df, iterations, cfg, filename=output_image)
+    
+    print("\n[COMPLETE] Analysis finished!")
+
 
 if __name__ == "__main__":
     main()
