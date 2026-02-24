@@ -135,6 +135,12 @@ TRANSLATIONS = {
         'post_opening': 'Post-Opening Phase',
         'months_unit': ' months',
         'total_duration': 'Total Project Duration',
+        'refi_analysis': '💸 Refinancing Analysis',
+        'refi_failure_rate': 'Refi Failure Rate',
+        'expected_shortfall': 'Expected Shortfall (Avg. Gap)',
+        'capital_injection': 'Capital Injection Required',
+        'no_shortfall': '✅ No Shortfall - All scenarios passed refinancing.',
+        'no_refi_reached': 'No scenarios reached the refinancing month.',
     },
     'ko': {
         'title': '📊 PF 유동성 리스크 분석기',
@@ -251,6 +257,12 @@ TRANSLATIONS = {
         'post_opening': '개원 후 단계',
         'months_unit': '개월',
         'total_duration': '총 프로젝트 기간',
+        'refi_analysis': '💸 전환대출(Refinancing) 심사 분석',
+        'refi_failure_rate': '리파이낸싱 실패 확률',
+        'expected_shortfall': '실패 시 평균 부족 자금 (Expected Shortfall)',
+        'capital_injection': '자본 보충 필요',
+        'no_shortfall': '✅ 안전 - 모든 시나리오에서 대출 한도가 충분합니다.',
+        'no_refi_reached': '리파이낸싱 심사 시점 도달 전 모든 시나리오가 부도 처리되었습니다.',
     }
 }
 
@@ -330,14 +342,18 @@ def create_outcome_chart(df: pd.DataFrame, lang: str) -> go.Figure:
             marker_line_width=1.5
         )
     ])
+
+    max_val = counts.max()
     
     fig.update_layout(
         title=t('outcome_dist', lang),
         xaxis_title="Outcome",
         yaxis_title=t('frequency', lang),
+        yaxis=dict(range=[0, max_val * 1.2]),
         height=400,
         showlegend=False,
-        hovermode='x'
+        hovermode='x',
+        margin=dict(t=60)
     )
     
     return fig
@@ -635,7 +651,7 @@ def main():
         st.markdown("---")
         
         # Interest Rate Parameters
-        st.subheader("📊 " + t('interest_rates', lang))
+        st.subheader(t('interest_rates', lang))
         
         st.info(t('rate_info', lang))
         
@@ -798,7 +814,7 @@ def main():
                 st.rerun()
         
         with col_base3:
-            if st.session_state['base_case'] and st.button("🔄 " + t('reset_base', lang), use_container_width=True):
+            if st.session_state['base_case'] and st.button(t('reset_base', lang), use_container_width=True):
                 st.session_state['base_case'] = None
                 st.rerun()
         
@@ -845,17 +861,66 @@ def main():
             col5.metric(t('var_95', lang), f"{var_95:.1f}%")
         
         st.markdown("---")
+
+        # Display refinancing analysis section
+        st.subheader(t('refi_analysis', lang))
+        
+        # Filter scenarios that successfully survived until the refinancing month
+        refi_cases = df[df["principal_at_refi"] > 0].copy()
+        
+        if not refi_cases.empty:
+            # Calculate the individual gap for each simulation path
+            # Shortfall = Debt at Refi - Maximum Loan Limit
+            refi_cases["shortfall"] = refi_cases["principal_at_refi"] - refi_cases["refi_loan_amount"]
+            
+            # Filter ONLY the paths where refinancing failed (Shortfall > 0)
+            failed_refi_cases = refi_cases[refi_cases["shortfall"] > 0]
+            
+            if not failed_refi_cases.empty:
+                # Calculate Conditional Mean (Expected Shortfall)
+                expected_shortfall = failed_refi_cases["shortfall"].mean()
+                failure_rate = (len(failed_refi_cases) / len(refi_cases)) * 100
+                
+                # Format currency based on user selection
+                if use_normalized:
+                    val_es = f"{expected_shortfall:.1f} {t('index', lang)}"
+                else:
+                    # Convert to Billions (KRW)
+                    val_es = f"{expected_shortfall / 1e8:,.0f} 억 원"
+                
+                # Render metrics
+                col_refi1, col_refi2 = st.columns(2)
+                
+                col_refi1.metric(
+                    label=t('refi_failure_rate', lang), 
+                    value=f"{failure_rate:.1f}%"
+                )
+                
+                col_refi2.metric(
+                    label=t('expected_shortfall', lang), 
+                    value=val_es,
+                    delta=t('capital_injection', lang),
+                    delta_color="inverse"
+                )
+            else:
+                # Handled all refinancing successfully
+                st.success(t('no_shortfall', lang))
+        else:
+            # Defaulted before reaching the refinancing phase
+            st.warning(t('no_refi_reached', lang))
+
+        st.markdown("---")
         
         # Visualizations - 2x2 Grid
         col1, col2 = st.columns(2)
         
         with col1:
-            st.plotly_chart(create_outcome_chart(df, lang), width='stretch')
-            st.plotly_chart(create_survival_curve(df, iterations, lang), width='stretch')
+            st.plotly_chart(create_outcome_chart(df, lang), width='stretch', key="chart_outcome")
+            st.plotly_chart(create_survival_curve(df, iterations, lang), width='stretch', key="chart_survival")
         
         with col2:
-            st.plotly_chart(create_irr_histogram(df, lang), width='stretch')
-            st.plotly_chart(create_exit_multiple_chart(df, lang), width='stretch')
+            st.plotly_chart(create_irr_histogram(df, lang), width='stretch', key="chart_irr")
+            st.plotly_chart(create_exit_multiple_chart(df, lang), width='stretch', key="chart_multiple")
         
         st.markdown("---")
         

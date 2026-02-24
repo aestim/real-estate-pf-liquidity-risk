@@ -34,6 +34,9 @@ class PFInvestmentModel:
         principal = self.cfg.senior_loan
         revenue_history: List[float] = []
 
+        principal_at_refi = 0.0
+        refi_loan_amount = 0.0
+
         # Sample rates
         pre_refi_rate = np.random.triangular(*self.cfg.pre_refi_rate)
         post_refi_rate = np.random.triangular(*self.cfg.post_refi_rate)
@@ -45,6 +48,8 @@ class PFInvestmentModel:
             np.random.triangular(0, 2, 6)
         )
         delay = max(0, completion_month - self.cfg.completion_target_month)
+
+        refi_month = completion_month + 3
         
         # Track refinancing status
         refinanced = False
@@ -88,15 +93,26 @@ class PFInvestmentModel:
             if equity <= 0:
                 return {"status": "default", "month": m, "final_equity": 0, "irr": -1.0}
 
-            # Refinancing Viability Check (Month 24)
-            if m == self.cfg.court_opening_month:
+            # Refinancing Viability Check (Month (Completion + 3))
+            if m == refi_month:
                 ltv_limit = np.random.triangular(*self.cfg.target_refi_ltv_dist)
-                rolling_noi = np.mean(revenue_history[-6:]) if len(revenue_history) >= 6 else np.mean(revenue_history)
+                operating_history = [rev for rev in revenue_history[-3:] if rev > 0]
+                rolling_noi = np.mean(operating_history) if operating_history else revenue
                 implied_val = (rolling_noi * 12) / self.cfg.cap_rate
+
+                max_refi_loan = implied_val * ltv_limit
+                principal_at_refi = principal
+                refi_loan_amount = max_refi_loan
                 
                 if principal > (implied_val * ltv_limit):
                     # Refinancing failed
-                    return {"status": "refi_fail", "month": m, "final_equity": 0, "irr": -1.0}
+                    return {
+                        "status": "refi_fail",
+                        "month": m,
+                        "final_equity": 0,
+                        "irr": -1.0,
+                        "principal_at_refi": principal_at_refi, "refi_loan_amount": refi_loan_amount
+                        }
                 else:
                     # Refinancing succeeded - switch to lower rate
                     refinanced = True
@@ -116,14 +132,15 @@ class PFInvestmentModel:
                     irr = -1.0
                 
                 return {
-                    "status": "exit",
-                    "month": m,
-                    "final_equity": max(0, exit_equity),
-                    "irr": irr,
-                    "exit_multiple": exit_equity / self.cfg.initial_equity if exit_equity > 0 else 0
+                    "status": "exit", "month": m, "final_equity": max(0, exit_equity), "irr": irr,
+                    "exit_multiple": exit_equity / self.cfg.initial_equity if exit_equity > 0 else 0,
+                    "principal_at_refi": principal_at_refi, "refi_loan_amount": refi_loan_amount
                 }
 
-        return {"status": "survived_no_exit", "month": self.cfg.exit_month, "final_equity": equity, "irr": 0.0}
+        return {
+            "status": "survived_no_exit", "month": self.cfg.exit_month, "final_equity": equity, "irr": 0.0,
+            "principal_at_refi": principal_at_refi, "refi_loan_amount": refi_loan_amount
+            }
 
 
 # ==========================================
