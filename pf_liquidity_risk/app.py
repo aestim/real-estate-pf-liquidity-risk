@@ -46,8 +46,8 @@ TRANSLATIONS = {
         'max': 'Max',
         'interest_rates': '📊 Interest Rates',
         'rate_info': '💡 Pre-refinancing rate applies until court opening. Post-refinancing rate applies after successful refinancing at court opening.',
-        'pre_refi_rates': 'Pre-Refinancing Rate (Month 0 - Court Opening)',
-        'post_refi_rates': 'Post-Refinancing Rate (After Court Opening)',
+        'pre_refi_rates': 'Pre-Refinancing Rate (Month 0 - Completion)',
+        'post_refi_rates': 'Post-Refinancing Rate',
         'min_rate': 'Min Rate',
         'mode_rate': 'Mode Rate',
         'max_rate': 'Max Rate',
@@ -166,10 +166,8 @@ TRANSLATIONS = {
         'max': '최대',
         'interest_rates': '금리',
         'rate_info': '💡 리파이낸싱 전 금리는 법원 개원 전까지 적용됩니다. 리파이낸싱 성공 시 법원 개원 후 금리로 전환됩니다.',
-        'pre_refi_rates': """리파이낸싱 전 금리
-        (0개월 - 법원 개원)""",
-        'post_refi_rates': """리파이낸싱 후 금리
-        (법원 개원 후)""",
+        'pre_refi_rates': '리파이낸싱 전 금리 (0개월 - 준공 후 3개월)',
+        'post_refi_rates': '리파이낸싱 후 금리',
         'min_rate': '최소 금리',
         'mode_rate': '최빈 금리',
         'max_rate': '최대 금리',
