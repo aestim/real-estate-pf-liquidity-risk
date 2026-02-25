@@ -81,6 +81,7 @@ timeline
     Month 24 - 36 : Full Operations
                   : District Court Opens (Month 24)
                   : Project Exit (Month 36)
+```
 
 ### The Challenge
 
