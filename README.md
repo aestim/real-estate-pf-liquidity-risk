@@ -64,17 +64,23 @@ streamlit run pf_liquidity_risk/app.py
 
 ### Project Timeline
 
-``` mermaid
-Month 0 ──────── Month 16 ─── Month 19 ──── Month 24 ──────── Month 36
-   |                |             |             |                 |
-Start          Completion    Refinancing  Court Opens        Exit
-   |                |             |             |                 |
-   └─Construction──┴─ 3mo Gap ───┴─Stabilization┴─ Full Ops ────┘
-
-Interest:    10-18%        10-18%        5-9%          5-9%
-Revenue:       0%         Starting     Ramp-up      Stabilized
-Cap Ratio:    100%          40%          0%            0%
-```
+```mermaid
+timeline
+    title PF Project Phases & Risk Gates
+    Month 0 - 16 : Construction Phase
+                 : Revenue 0
+                 : Interest 10-18% (100% Capitalized)
+    Month 16 - 19 : Critical 3-Month Gap
+                  : E-Mart Revenue Starts
+                  : Interest 10-18% (40% Capitalized)
+                  : 🚨 Highest Equity Burn
+    Month 19 : Refinancing Gate
+             : Valuation based on 3-mo Trailing NOI
+    Month 19 - 24 : Stabilization
+                  : Interest drops to 5-9%
+    Month 24 - 36 : Full Operations
+                  : District Court Opens (Month 24)
+                  : Project Exit (Month 36)
 
 ### The Challenge
 
@@ -183,8 +189,7 @@ graph LR
 ### Stochastic Variables (Triangular Distributions)
 
 | Variable | Min | Mode | Max | Applied Phase |
-
-|:---|:---:|:---:|:---:|:---|
+| :--- | :---: | :---: | :---: | :--- |
 | Interest Rate | 10% | 14% | 18% | Pre-Refinancing (0-19m) |
 | Interest Rate | 5% | 7% | 9% | Post-Refinancing (19-36m) |
 | Monthly Revenue | 8.9 | 21.4 | 26.8 | Stabilization (indexed) |
