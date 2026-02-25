@@ -118,6 +118,7 @@ TRANSLATIONS = {
         'adjust_params': '👈 Adjust parameters in the sidebar and click \'🚀 Run Simulation\' to start',
         'no_exits': 'No successful exits in this scenario - adjust parameters to improve outcomes',
         'index': 'Index',
+        'currency_unit': 'Bil KRW',
         'billions': 'Billions',
         'millions': 'Millions',
         'pct_of_equity': '% of Equity',
@@ -238,6 +239,7 @@ TRANSLATIONS = {
         'adjust_params': '👈 사이드바에서 파라미터를 조정하고 \'🚀 시뮬레이션 실행\' 버튼을 클릭하세요',
         'no_exits': '이 시나리오에서 성공적인 exit이 없습니다 - 파라미터를 조정하여 결과를 개선하세요',
         'index': '인덱스',
+        'currency_unit': '억 원',
         'billions': '십억',
         'millions': '백만',
         'pct_of_equity': '자기자본 대비 %',
@@ -883,17 +885,24 @@ def main():
                 if use_normalized:
                     val_es = f"{expected_shortfall:.1f} {t('index', lang)}"
                 else:
-                    # Convert to Billions (KRW)
-                    val_es = f"{expected_shortfall / 1e8:,.0f} 억 원"
-                
+                    if lang == 'en':
+                        divisor = 1e9
+                        fmt = ",.1f"
+                    else:
+                        divisor = 1e8
+                        fmt = ",.0f"
+                    val_num = expected_shortfall / divisor
+
+                    val_es = f"{val_num:{fmt}} {t('currency_unit', lang)}"
+
                 # Render metrics
                 col_refi1, col_refi2 = st.columns(2)
-                
+
                 col_refi1.metric(
                     label=t('refi_failure_rate', lang), 
                     value=f"{failure_rate:.1f}%"
                 )
-                
+
                 col_refi2.metric(
                     label=t('expected_shortfall', lang), 
                     value=val_es,
