@@ -112,28 +112,19 @@ flowchart LR
 
 ## 📊 Key Results
 
-### Outcome Probabilities (30,000 simulations)
+### Project Risk Summary (30,000 simulations)
 
-| Outcome | Probability | Description |
-| :--- | :---: | :--- |
-| Successful Exit | 65% | Positive equity at Month 36 |
-| Default | 25% | Equity wipeout before refinancing (Month 16-19) |
-| Refinancing Failure | 10% | Debt exceeds LTV limit at Month 19 |
+| Outcome | Probability | Timing | Root Cause & Description |
+| :--- | :---: | :---: | :--- |
+| **Refinancing Failure** | **92.8%** | Month 19 | **Critical Bottleneck:** E-Mart NOI alone is insufficient to meet the 19B KRW LTV gate |
+| **Successful Exit** | **7.2%** | Month 36 | **Best Case:** Requires exceptional early lease-up of upper floors to offset debt |
+| **Default** | **0.0%** | Month 16-19 | **Downside Protected:** E-Mart baseline revenue effectively neutralizes immediate insolvency |
 
 ### Risk Metrics
 
-- **95% VaR:** 75% of initial equity
-- **Expected Loss:** 32% of equity base
-- **Median IRR (exits):** 8.5% annualized
-- **Survival Rate Bottleneck:** Month 16-19 (steepest decline due to 3-month window)
-
-### Why Projects Fail
-
-| Failure Mode | Probability | Timing | Root Cause |
-| :--- | :---: | :--- | :--- |
-| **Default** | 25% | Month 16-19 | High rates + insufficient revenue → equity wipeout |
-| **Refi Failure** | 10% | Month 19 | 3-month trailing NOI too low → can't meet LTV |
-| **Success** | 65% | Month 36 | Survived both critical gates |
+- **Expected Shortfall:** ~5.7B KRW (Average capital injection required upon refi failure)
+- **95% VaR:** 100.0% of initial equity (Full loss potential in refi failure scenarios)
+- **Median IRR (exits):** 50.0% annualized (High-risk, high-reward profile)
 
 ---
 
@@ -167,12 +158,18 @@ flowchart LR
 ### Architecture
 
 ```mermaid
-graph LR
-    A[Config] -->|Parameters| B[Monte Carlo Engine]
-    B -->|30k Paths| C[DataFrame]
-    C --> D[CLI Reports]
-    C --> E[Streamlit Dashboard]
-    E --> F[Plotly Charts]
+flowchart LR
+    classDef engine fill:#1e293b,stroke:#64748b,stroke-width:2px,color:#f8fafc
+    classDef ui fill:#0f766e,stroke:#2dd4bf,stroke-width:2px,color:#f8fafc
+
+    A[PF Config] -->|Params| B(Monte Carlo Engine):::engine
+    B -->|30k Scenarios| C[(Pandas DataFrame)]:::engine
+    
+    subgraph Presentation Layer
+        C --> D[CLI Output]:::ui
+        C --> E[Streamlit App]:::ui
+        E --> F[Plotly Visuals]:::ui
+    end
 ```
 
 ### Core Components
