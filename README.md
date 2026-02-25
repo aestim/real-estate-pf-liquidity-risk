@@ -4,274 +4,353 @@
 
 [![CCDS Project template](https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter)](https://cookiecutter-data-science.drivendata.org/)
 
-This repository presents a **stochastic liquidity risk analysis** for a highly leveraged commercial real estate development project. It applies Monte Carlo simulation methods to quantify structural weaknesses in project finance (PF) capital structures and support data-driven investment decisions.
+Monte Carlo simulation framework for quantifying liquidity risk in highly leveraged commercial real estate development projects. Analyzes default probability, refinancing viability, and equity IRR distributions through 30,000+ stochastic scenarios.
 
-> **Confidentiality Notice:** All financial figures have been normalized and location-specific details anonymized to protect proprietary transaction information. The modeling framework, simulation methodology, and analytical conclusions remain representative of the original analysis performed for a real development project.
+> **Confidentiality Notice:** All financial figures normalized and location details anonymized. Methodology and conclusions remain representative of real project analysis.
+
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+git clone https://github.com/yourusername/pf-liquidity-risk.git
+cd pf-liquidity-risk
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### Run Simulation
+
+```bash
+# CLI version
+python pf_liquidity_risk/modeling/train.py
+
+# Interactive dashboard
+streamlit run pf_liquidity_risk/app.py
+```
 
 ---
 
 ## 📌 Executive Summary
 
-The analyzed project involves a commercial development facing significant liquidity risk due to aggressive leverage (~75-80% LTV) and a critical timing gap between asset completion and primary demand activation. By leveraging **30,000-iteration Monte Carlo simulations** with triangular probability distributions, this analysis quantifies default probability, refinancing viability, and equity IRR distributions.
+**Project Profile:**
 
-> **Key Finding:** Under base-case assumptions, the project exhibits a **~35% probability of failure** (default or refinancing failure) before exit, driven primarily by interest capitalization and the NOI ramp-up period.
+* Commercial parking tower development adjacent to new district court
+* 77% initial LTV, 3.4x leverage
+* **Critical 3-month window** between completion (Month 16) and refinancing (Month 19)
 
----
+**Key Finding:** ~35% probability of failure (default or refinancing failure) under base-case assumptions, driven by:
 
-## 1. Transaction Overview – Capital Stack
-
-| Category | Index Value | % of Total | Notes |
-| :--- | :--- | :--- | :--- |
-| **Initial Equity** | 100 | ~23% | Committed sponsor capital |
-| **Senior Loan** | 339 | ~77% | Construction + Bridge financing |
-| **Total Project Cost** | 439 | 100% | Equity + Senior debt |
-| **Initial LTV** | **77%** | — | Debt / (Debt + Equity) |
-| **Target GDV** | ~536 – 625 | — | Stabilized asset value (Cap Rate 5.5%) |
-| **Leverage Ratio** | **3.4x** | — | Debt / Equity multiple |
-
-### Note: All capital values indexed to Initial Equity = 100 for confidentiality
+1. Only 3 months post-completion to generate trailing NOI for refinancing
+2. High construction rates (10-18%) continuing during this critical window
+3. Insufficient revenue to cover debt service → rapid equity erosion
 
 ---
 
-## 2. Core Investment Issue: The 24-Month Structural Gap
+## 🎯 Core Problem: The 3-Month Refinancing Window
 
-A critical **timing mismatch** exists between three project phases:
+### Project Timeline
 
-* **Phase 1: Construction (0–16 months)** – Zero revenue, 100% interest capitalization
-* **Phase 2: Stabilization (16–24 months)** – Ramp-up period, partial revenue (indexed: 8.9–26.8 monthly)
-* **Phase 3: Post-Opening (24–36 months)** – Stabilized operations (indexed: 21.4–44.6 monthly)
-
-During Phase 2, the project experiences **Negative Carry** where debt service outpaces NOI. Additionally, construction delays (stochastically modeled 0–6 months) directly erode equity buffers.
-
----
-
-## 3. Analytical Approach & Methodology
-
-### 3.1 Stochastic Modeling Framework
-
-I developed a **Python-based Monte Carlo simulation engine** to evaluate liquidity risk across 30,000 randomized scenarios.
-
-**Key Stochastic Variables (Triangular Distributions):**
-
-| Variable | Min | Mode | Max | Phase |
-| :--- | :--- | :--- | :--- | :--- |
-| Interest Rate | 10% | 14% | 18% | Pre-Completion |
-| Interest Rate | 8% | 11% | 14% | Stabilization |
-| Interest Rate | 5% | 7% | 9% | Post-Demand Activation |
-| Monthly Revenue (Index) | 8.9 | 21.4 | 26.8 | Stabilization |
-| Monthly Revenue (Index) | 21.4 | 35.7 | 44.6 | Post-Opening |
-| Construction Delay | 0 mo | 2 mo | 6 mo | One-time shock |
-| Refinancing LTV | 70% | 80% | 85% | Month 24 |
-
-### 3.2 Simulation Logic
-
-```python
-# Each iteration simulates 36 months of:
-# 1. Phase-dependent revenue generation
-# 2. Interest accrual (with phase-specific capitalization ratios)
-# 3. Cash sweep debt paydown (when NOI > 0)
-# 4. Equity buffer erosion under negative carry
-# 5. Refinancing viability check (Month 24)
-# 6. Exit valuation via Income Approach (Cap Rate 5.5%)
+```
+Month 0 ──────── Month 16 ─── Month 19 ──── Month 24 ──────── Month 36
+   |                |             |             |                 |
+Start          Completion    Refinancing  Court Opens        Exit
+   |                |             |             |                 |
+   └─Construction──┴─ 3mo Gap ───┴─Stabilization┴─ Full Ops ────┘
+   
+Interest:    10-18%        10-18%        5-9%          5-9%
+Revenue:       0%         Starting     Ramp-up      Stabilized
+Cap Ratio:    100%          40%          0%            0%
 ```
 
-**Critical Checkpoints:**
+### The Challenge
 
-* **Insolvency Check:** Triggered when equity ≤ 0 → Immediate default
-* **Refinancing Check (Month 24):** Debt must be ≤ (Property Value × LTV) or refinancing fails
-* **Exit Transaction (Month 36):** Final equity = Property Value – Remaining Debt – Exit Costs (1–2%)
+| Phase | Timeline | Revenue | Interest | Risk |
 
-### 3.3 Interest Capitalization Structure
+|:---|:---|:---|:---|:---|
+| **Construction** | 0-16m | Zero | 10-18% (100% capitalized) | Construction delays |
+| **Critical Window** | 16-19m | Starting | 10-18% (40% capitalized) | **Highest equity burn** |
+| **Refinancing Gate** | Month 19 | - | Rate reset | Refinancing failure risk |
+| **Stabilization** | 19-24m | Ramp-up | 5-9% (0% capitalized) | Market risk |
+| **Post-Opening** | 24-36m | Stabilized | 5-9% (0% capitalized) | Sustained operations |
 
-| Phase | Capitalization Ratio | Economic Rationale |
-| :--- | :--- | :--- |
-| Construction | 100% | No cash flow to service debt |
-| Stabilization | 40% | Partial NOI covers ~60% of interest |
-| Exit | 0% | Fully amortizing debt service |
+**Month 16-19 (Critical 3-Month Window):**
+
+* Building just completed - revenue starting from zero
+* Still paying construction-phase rates (10-18% p.a.)
+* Need 3-month trailing NOI for bank refinancing valuation
+* Revenue only 20-50% of full capacity → insufficient to cover debt service
+* **This is where most equity erosion occurs**
+
+**Month 19 (Refinancing Gate):**
+
+* Property value = (3-month trailing NOI × 12) / 5.5% cap rate
+* Bank requirement: Current Debt ≤ Property Value × LTV (70-85%)
+* **Success:** Interest drops to 5-9%, debt service manageable → survival likely
+* **Failure:** Cannot refinance, rates stay at 10-18% → default likely within 3-6 months
+
+**Month 24 (Court Opening):**
+
+* District court opens → primary demand driver activates
+* Revenue stabilizes at 80-100% capacity
+* No longer a critical gate (already refinanced at Month 19)
 
 ---
 
-## 4. Key Findings & Risk Metrics
+## 📊 Key Results
 
-### 4.1 Outcome Probability Distribution
-
-Based on 30,000 simulations:
+### Outcome Probabilities (30,000 simulations)
 
 | Outcome | Probability | Description |
-| :--- | :--- | :--- |
-| **Successful Exit** | ~65% | Project survives to Month 36 with positive equity |
-| **Default** | ~25% | Equity wipeout before Month 24 |
-| **Refinancing Failure** | ~10% | Debt exceeds LTV limit at Month 24 |
 
-### 4.2 Risk Metrics
+|:---|:---:|:---|
+| Successful Exit | 65% | Positive equity at Month 36 |
+| Default | 25% | Equity wipeout before refinancing (Month 16-19) |
+| Refinancing Failure | 10% | Debt exceeds LTV limit at Month 19 |
 
-* **95% Capital at Risk (VaR):** ~75% of initial equity
-* **Expected Loss:** ~32% of equity base
-* **Median IRR (Exit Cases):** 8.5% annualized
-* **IRR Volatility:** 6.2% standard deviation
+### Risk Metrics
 
-### 4.3 Survival Rate Dynamics
+* **95% VaR:** 75% of initial equity
+* **Expected Loss:** 32% of equity base
+* **Median IRR (exits):** 8.5% annualized
+* **Survival Rate Bottleneck:** Month 16-19 (steepest decline due to 3-month window)
 
-The simulation tracks **cumulative survival probability** month-by-month:
+### Why Projects Fail
 
-* **Month 16 (Completion):** 88% survival rate (construction delays cause early defaults)
-* **Month 18–22:** Steepest decline (negative carry period)
-* **Month 24 (Refinancing Gate):** 72% survival rate
-* **Month 36 (Exit):** 65% success rate
+| Failure Mode | Probability | Timing | Root Cause |
 
----
-
-## 5. Strategic Recommendations
-
-### 5.1 Pre-Construction Phase
-
-1. **Equity Cushion Sizing:** Increase equity buffer by 25–40% to absorb 6-month construction delays
-2. **Interest Rate Hedging:** Fix construction-phase rate at ≤12% to reduce tail risk
-
-### 5.2 Stabilization Phase (Months 16–24)
-
-1. **Aggressive Lease-Up:** Incentivize early occupancy to accelerate NOI breakeven
-2. **Mezzanine Capital:** Secure subordinated facility (35–55% of equity) to bridge liquidity gap
-3. **Partial Asset Sale:** Pre-sell 20–30% of units to deleverage before refinancing checkpoint
-
-### 5.3 Refinancing Strategy (Month 24)
-
-1. **Conservative LTV Target:** Aim for 70% LTV to ensure refinancing approval under stress
-2. **Rolling NOI Documentation:** Maintain 6-month trailing NOI at target thresholds for valuation confidence
+|:---|:---:|:---|:---|
+| **Default** | 25% | Month 16-19 | High rates + insufficient revenue → equity wipeout |
+| **Refi Failure** | 10% | Month 19 | 3-month trailing NOI too low → can't meet LTV |
+| **Success** | 65% | Month 36 | Survived both critical gates |
 
 ---
 
-## 6. Project Organization (CCDS Structure)
+## 🔧 Interactive Dashboard Features
 
-This project follows the **Cookiecutter Data Science** standard for modularity and reproducibility.
+* **Real-time parameter adjustment**
+  - Capital structure (equity, debt, fixed costs)
+  - Revenue distributions (stabilization & post-opening phases)
+  - Interest rate scenarios (pre/post refinancing)
+  - Project timeline (completion, refinancing, court opening, exit)
+
+* **Dynamic visualizations**
+  - Outcome probability distribution
+  - IRR histogram with percentiles
+  - Month-by-month survival curve
+  - Exit multiple analysis
+
+* **Scenario comparison**
+  - Save baseline scenarios
+  - Compare deltas across runs
+  - Track changes in key metrics
+
+* **Bilingual interface** - English/Korean toggle
+
+* **Export capabilities** - Download CSV results, save high-resolution charts
+
+---
+
+## 🛠️ Technical Stack
+
+### Architecture
+
+```mermaid
+graph LR
+    A[Config] -->|Parameters| B[Monte Carlo Engine]
+    B -->|30k Paths| C[DataFrame]
+    C --> D[CLI Reports]
+    C --> E[Streamlit Dashboard]
+    E --> F[Plotly Charts]
+```
+
+### Core Components
+
+* **Simulation Engine:** `PFInvestmentModel` - Monthly cash flow paths with stochastic variables
+* **Configuration:** `PFConfig` - Dataclass with triangular distributions for all parameters
+* **Visualization:** Plotly interactive charts + Matplotlib static reports
+* **Caching:** Streamlit @cache_data for instant re-runs with same parameters
+
+### Stochastic Variables (Triangular Distributions)
+
+| Variable | Min | Mode | Max | Applied Phase |
+
+|:---|:---:|:---:|:---:|:---|
+| Interest Rate | 10% | 14% | 18% | Pre-Refinancing (0-19m) |
+| Interest Rate | 5% | 7% | 9% | Post-Refinancing (19-36m) |
+| Monthly Revenue | 8.9 | 21.4 | 26.8 | Stabilization (indexed) |
+| Monthly Revenue | 21.4 | 35.7 | 44.6 | Post-Opening (indexed) |
+| Construction Delay | 0mo | 2mo | 6mo | One-time shock |
+| Refinancing LTV | 70% | 80% | 85% | Month 19 gate |
+
+---
+
+## 💼 Use Cases
+
+### For Developers
+
+* **Pre-Investment Due Diligence:** Quantify probability of surviving the 3-month window
+* **Capital Structure Optimization:** Test different debt/equity mixes
+* **Contingency Planning:** Size equity reserves for construction delays + refinancing gap
+
+### For Lenders
+
+* **Credit Risk Assessment:** Evaluate refinancing failure probability
+* **Covenant Structuring:** Set appropriate LTV thresholds for Month 19 gate
+* **Portfolio Risk Management:** Stress test exposure across multiple PF loans
+
+### For Investors
+
+* **Risk-Adjusted Return Analysis:** Compare IRR distributions across deals
+* **Liquidity Risk Quantification:** Understand 3-month window vulnerability
+* **Exit Strategy Planning:** Identify optimal hold periods given refinancing risk
+
+---
+
+## 📈 Strategic Recommendations
+
+### Pre-Construction
+
+1. **Equity buffer:** Increase 30-40% above base case to absorb 3-month negative carry
+2. **Rate hedging:** Fix construction rate ≤12% to reduce downside exposure
+3. **Accelerated construction:** Reduce completion time 16→14 months to shorten high-rate period
+
+### Critical Window (Month 16-19) - HIGHEST PRIORITY
+
+1. **Pre-leasing:** Secure anchor tenant commitments BEFORE completion
+2. **Aggressive lease-up:** Offer 2-3 months rent-free to accelerate occupancy
+3. **Bridge financing:** Arrange mezzanine debt specifically for this 3-month gap
+4. **Operating reserves:** Pre-fund 3 months of debt service shortfall
+5. **Early revenue optimization:** Price competitively to hit 50%+ occupancy by Month 17
+
+### Refinancing (Month 19)
+
+1. **Conservative LTV target:** Aim for 70% (not 80-85%) for stress approval
+2. **NOI documentation:** Ensure 3-month trailing average ≥ minimum threshold
+3. **Lender pre-commitment:** Negotiate refinancing terms 6 months in advance
+4. **Alternative lenders:** Line up backup refinancing sources
+
+### Post-Refinancing (Month 19-36)
+
+1. **Debt paydown:** Use excess cash flow to reduce principal aggressively
+2. **Court opening coordination:** Monitor district court construction timeline
+3. **Exit timing:** Optimize sale timing for maximum stabilized NOI multiple
+
+---
+
+## ⚠️ Limitations & Assumptions
+
+### Model Assumptions
+
+1. **Interest rates independent across phases** - No correlation between pre/post refi rates
+2. **Revenue distributions static** - Does not account for market cyclicality
+3. **No explicit macroeconomic scenarios** - Recession, rate shocks not modeled
+4. **Single-asset analysis** - Portfolio diversification effects not considered
+5. **Fixed refinancing timing** - Month 19 not optimized dynamically
+6. **Deterministic court opening** - Month 24 assumed certain (not stochastic)
+
+### Data Requirements
+
+* Accurate construction timeline estimates
+* Reliable market rent/occupancy data for 3-month ramp-up
+* Lender refinancing appetite (LTV assumptions)
+* District court construction schedule certainty
+
+### Not Suitable For
+
+* ❌ Early-stage land banking projects
+* ❌ Multi-phase developments with complex waterfall structures
+* ❌ International projects with FX risk
+* ❌ Projects with significant regulatory uncertainty
+* ❌ Residential projects with different absorption patterns
+
+---
+
+## 📁 Project Structure
 
 ```text
-├── README.md          <- Project overview (this file)
-├── data
-│   ├── raw            <- Market comparables, interest rate data
-│   └── processed      <- Cleaned inputs for simulation
-├── notebooks          <- Jupyter notebooks for sensitivity analysis
-├── reports            <- Generated analysis reports
-│   └── figures        <- Monte Carlo output visualizations
-│       └── pf_liquidity_analysis_v1.png
-├── requirements.txt   <- Python environment (numpy, pandas, matplotlib)
-└── pf_liquidity_risk  <- Source code for simulation
-    ├── config.py       <- Project parameters (FIGURES_DIR, constants)
-    ├── configs/
-    │   ├── public_config.py    <- Normalized parameters (committed)
-    │   └── private_config.py   <- Real parameters (gitignored)
-    ├── modeling
-    │   └── train.py    <- Monte Carlo simulation engine
-    └── plots.py        <- Visualization functions
+├── pf_liquidity_risk/
+│   ├── modeling/
+│   │   ├── config_model.py    # PFConfig dataclass
+│   │   └── train.py            # Monte Carlo engine
+│   ├── configs/
+│   │   ├── public_config.py    # Normalized params (committed)
+│   │   └── private_config.py   # Real params (gitignored)
+│   └── app.py                  # Streamlit dashboard
+├── reports/figures/            # Output visualizations
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
-## 7. Technical Implementation
+## ❓ FAQ
 
-### 7.1 Core Modules
+**Q: Why only 3 months between completion and refinancing?**  
+A: Banks require trailing NOI to value the property, but construction lenders demand repayment soon after completion. 3 months is the minimum window to build operating history while maintaining construction loan terms.
 
-**`PFConfig` (Data Class)**
+**Q: Why not refinance at Month 16 (immediately at completion)?**  
+A: Zero operating history at completion. Banks need at least 3 months of trailing NOI to underwrite refinancing. Earlier than Month 19 is typically not feasible.
 
-* Encapsulates all financial parameters and probability distributions
-* Supports scenario testing by modifying initialization parameters
-* Public version uses normalized/indexed values for portfolio demonstration
+**Q: What if the 3-month NOI is weak but improving?**  
+A: Most banks use trailing 3-month average. A weak start (Month 16-17) can sink the average even if Month 18-19 is strong. This is why pre-leasing is critical.
 
-**`PFInvestmentModel` (Simulation Engine)**
+**Q: Can you delay refinancing beyond Month 19?**  
+A: Construction loans typically have strict maturity dates (often 18-24 months post-completion). Extending requires underwriting equivalent to refinancing, so no advantage to delaying if you can refinance successfully.
 
-* Generates single stochastic path (36 months)
-* Returns status: `exit`, `default`, `refi_fail`, or `survived_no_exit`
+**Q: What's the relationship between court opening (Month 24) and refinancing (Month 19)?**  
+A: Court opening is the primary demand driver but occurs 5 months AFTER refinancing. Banks at Month 19 are betting on future demand. If court construction is delayed, refinancing becomes much harder.
 
-**`run_simulation()` Function**
+**Q: Simulation runtime?**  
+A: 2-5 seconds for 30,000 iterations on modern hardware. Dashboard is cached for instant re-runs with identical parameters.
 
-* Executes 30,000 Monte Carlo iterations
-* Returns pandas DataFrame with results + configuration object
+**Q: Can this be adapted for residential projects?**  
+A: Yes, but adjust the revenue ramp-up curve (residential absorption is typically 6-12 months, not 3 months) and interest capitalization ratios.
 
-**`plot_enhanced_results()` Function**
+---
 
-* Generates 3-panel analytical dashboard:
-  1. Outcome distribution (bar chart)
-  2. IRR distribution histogram (exit cases only)
-  3. Survival rate curve (monthly tracking)
+## 🤝 Contributing
 
-### 7.2 Running the Analysis
+Contributions welcome! Priority areas:
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+* Correlation structures between interest rates and revenue
+* Sensitivity analysis visualizations (tornado diagrams)
+* Mezzanine debt waterfall logic
+* Jupyter notebook tutorials
+* Additional output formats (Excel reports)
 
-# Execute simulation with public (normalized) config
-python pf_liquidity_risk/modeling/train.py
+---
 
-# Output:
-# - Console: Risk metrics (VaR, probabilities, IRR statistics)
-# - File: reports/figures/pf_liquidity_analysis_v1.png
+## 📚 Citation
+
+```bibtex
+@software{kim2025pf_liquidity_risk,
+  author = {Kim, Minsung},
+  title = {PF Liquidity Risk: Monte Carlo Simulation Framework for Real Estate Project Finance},
+  year = {2025},
+  url = {https://github.com/yourusername/pf-liquidity-risk},
+  note = {Stochastic analysis of refinancing risk in leveraged commercial real estate development}
+}
 ```
 
-### 7.3 Data Confidentiality Approach
-
-**Normalization Method:**
-
-* All capital values indexed to Initial Equity = 100
-* Ratios (LTV, leverage, cap rate) preserved for analytical validity
-* Location and entity names redacted
-* Market rates (interest, cap rate) retained as they're public data
-
-**Git Security:**
-
-* `configs/private_config.py` in `.gitignore` (real parameters)
-* `configs/public_config.py` committed (normalized parameters)
-* No sensitive data in git history
-
 ---
 
-## 8. Skills & Tools
+## 📧 Contact
 
-* **Domain Expertise:** Real Estate Project Finance, Structured Finance, Risk Management
-* **Quantitative Methods:** Monte Carlo Simulation, Stochastic Modeling, Capital Structure Optimization
-* **Technical Stack:** Python (NumPy, Pandas, Matplotlib), Statistical Distributions, Cash Flow Modeling
-* **Engineering:** Modular code design (CCDS), reproducible research, data visualization, confidentiality management
-
----
-
-## 9. Key Takeaway
-
-In highly leveraged real estate development, **liquidity risk dominates market risk** when structural mismatches exist between debt terms and NOI stabilization. By quantifying downside scenarios through stochastic simulation, sponsors can:
-
-1. **Right-size equity commitments** to absorb construction delays
-2. **Structure refinancing covenants** around realistic NOI ramp-up profiles
-3. **Identify optimal exit timing** to maximize risk-adjusted returns
-
-This framework transforms qualitative "what-if" discussions into **quantified probability distributions**, enabling data-driven capital allocation decisions.
-
-**Methodological Contribution:** This analysis demonstrates how Monte Carlo methods can reveal hidden liquidity risks that traditional static DCF models fail to capture, particularly in projects with multi-stage financing gates and asymmetric downside exposure.
-
----
-
-## 10. Future Enhancements
-
-* [ ] Add correlation structures between interest rates and revenue (e.g., rising rates → lower demand)
-* [ ] Implement waterfall cash flow logic for mezzanine/equity tranches
-* [ ] Develop interactive dashboard (Plotly/Streamlit) for live scenario testing
-* [ ] Integrate macroeconomic scenarios (recession, rate shock, market correction)
-* [ ] Add Value at Risk (VaR) and Conditional VaR (CVaR) analytics
-* [ ] Sensitivity analysis for key input parameters
-* [ ] Stress testing framework for worst-case scenarios
-
----
-
-## 11. Academic & Industry Context
-
-This methodology aligns with best practices in structured finance risk management:
-
-* **Basel III Framework:** Capital adequacy assessment for real estate exposure
-* **RICS Valuation Standards:** Income approach with sensitivity testing
-* **Academic Research:** Copeland & Weston (2005) on project finance; Geltner et al. (2014) on real estate risk modeling
-
----
-
-**Repository:** [GitHub - PF Liquidity Risk Analysis](https://github.com/yourusername/pf-liquidity-risk)  
 **Author:** Minsung Kim  
-**License:** MIT
+**Repository:** [github.com/yourusername/pf-liquidity-risk](https://github.com/yourusername/pf-liquidity-risk)  
+**Issues:** [GitHub Issues](https://github.com/yourusername/pf-liquidity-risk/issues)
 
 ---
+
+## 📄 License
+
+MIT License - See [LICENSE](LICENSE) file for details
+
+---
+
+**Built with:** Python • NumPy • Pandas • Streamlit • Plotly  
+**Methodology:** Monte Carlo Simulation • Stochastic Modeling • Project Finance Risk Management

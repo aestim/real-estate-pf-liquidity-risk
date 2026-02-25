@@ -189,3 +189,5 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+pf_liquidity_risk/configs/private_config.py
