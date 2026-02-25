@@ -72,7 +72,7 @@ flowchart LR
     classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#fff
 
     Start((Start)) --> Const[Month 0-16<br/>Construction Phase<br/>Int: 10-18%]
-    Const --> Gap[Month 16-19<br/>Critical 3mo Gap<br/>E-Mart Only]:::danger
+    Const --> Gap[Month 16-19<br/>Critical 3mo Gap<br/>E-Mart + Early Leases]:::danger
     Gap --> Refi{Month 19<br/>Refinancing Gate<br/>Valuation Check}:::gate
     Refi --> Stab[Month 19-24<br/>Stabilization<br/>Int drops 5-9%]
     Stab --> Ops[Month 24-36<br/>Full Ops & Court<br/>Max Valuation]:::success
@@ -91,10 +91,9 @@ flowchart LR
 
 **Month 16-19 (Critical 3-Month Window):**
 
-- Building just completed - Baseline revenue begins strictly from the E-Mart anchor lease.
+- Building just completed - Revenue is anchored by E-Mart Everyday and supplemented by initial early-moving tenants.
 - Still paying construction-phase rates (10-18% p.a.) on the massive 19B KRW debt.
-- While E-Mart provides downside protection, it only covers ~20-30% of the total capacity. The remaining vacant units generate zero trailing NOI.
-- **The structural flaw:** The E-Mart revenue alone is mathematically insufficient to cover the compounding debt service, leading to aggressive equity erosion before upper-floor leases stabilize**
+- **The structural flaw:** While the E-Mart anchor significantly accelerates overall lease-up, the combined initial NOI during this 3-month fit-out/rent-free period is still mathematically insufficient to cover the compounding debt service and hit the demanding LTV threshold, leading to equity erosion.
 
 **Month 19 (Refinancing Gate):**
 
