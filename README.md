@@ -65,22 +65,18 @@ streamlit run pf_liquidity_risk/app.py
 ### Project Timeline
 
 ```mermaid
-timeline
-    title PF Project Phases & Risk Gates
-    Month 0 - 16 : Construction Phase
-                 : Revenue 0
-                 : Interest 10-18% (100% Capitalized)
-    Month 16 - 19 : Critical 3-Month Gap
-                  : E-Mart Revenue Starts
-                  : Interest 10-18% (40% Capitalized)
-                  : 🚨 Highest Equity Burn
-    Month 19 : Refinancing Gate
-             : Valuation based on 3-mo Trailing NOI
-    Month 19 - 24 : Stabilization
-                  : Interest drops to 5-9%
-    Month 24 - 36 : Full Operations
-                  : District Court Opens (Month 24)
-                  : Project Exit (Month 36)
+flowchart LR
+    classDef default fill:#1f2937,stroke:#4b5563,stroke-width:2px,color:#fff
+    classDef danger fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fff
+    classDef gate fill:#1e3a8a,stroke:#60a5fa,stroke-width:2px,color:#fff
+    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#fff
+
+    Start((Start)) --> Const[Month 0-16<br/>Construction Phase<br/>Int: 10-18%]
+    Const --> Gap[Month 16-19<br/>Critical 3mo Gap<br/>E-Mart Only]:::danger
+    Gap --> Refi{Month 19<br/>Refinancing Gate<br/>Valuation Check}:::gate
+    Refi --> Stab[Month 19-24<br/>Stabilization<br/>Int drops 5-9%]
+    Stab --> Ops[Month 24-36<br/>Full Ops & Court<br/>Max Valuation]:::success
+    Ops --> Exit((Exit))
 ```
 
 ### The Challenge
