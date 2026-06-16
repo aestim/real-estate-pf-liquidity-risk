@@ -13,7 +13,7 @@ reports/mart_*.csv
 .vscode/
 
 # Personal interview prep (do not publish)
-INTERVIEW_NOTES.md
+INTERVIEW_NOTES*.md
 
 # Mac OS-specific storage files
 .DS_Store

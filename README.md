@@ -3,12 +3,12 @@
 ## Stochastic Cash Flow Modeling & Monte Carlo Risk Analysis
 
 [![CCDS Project template](https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter)](https://cookiecutter-data-science.drivendata.org/)
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://pf-liquidity-risk.streamlit.app/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://real-estate-pf-liquidity-risk.streamlit.app/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Monte Carlo simulation framework for quantifying liquidity risk in highly leveraged commercial real estate development projects. Analyzes default probability, refinancing viability, and equity IRR distributions through 30,000+ stochastic scenarios.
 
-> **🚀 [Try the Live Demo](https://pf-liquidity-risk.streamlit.app/)** - Interactive dashboard with real-time parameter adjustment
+> **🚀 [Try the Live Demo](https://real-estate-pf-liquidity-risk.streamlit.app/)** - Interactive dashboard with real-time parameter adjustment
 
 ---
 
@@ -16,7 +16,7 @@ Monte Carlo simulation framework for quantifying liquidity risk in highly levera
 
 ### Option 1: Live Demo (Fastest)
 
-**👉 [Launch Dashboard](https://pf-liquidity-risk.streamlit.app/)**
+**👉 [Launch Dashboard](https://real-estate-pf-liquidity-risk.streamlit.app/)**
 
 Run simulations instantly in your browser with:
 
