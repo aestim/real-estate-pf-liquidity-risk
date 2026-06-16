@@ -414,43 +414,21 @@ This section details the financial assumptions behind the **3-month "Death Valle
 
 ---
 
-## 🤝 Contributing
+## 🗺️ Roadmap / Future Work
 
-Contributions welcome! Priority areas:
+Planned extensions (in rough priority order):
 
-- Correlation structures between interest rates and revenue
+- Correlation structure between interest rates and revenue
+- Incremental loads for the dbt marts (vs. full refresh)
+- Airflow DAG for scheduling
 - Sensitivity analysis visualizations (tornado diagrams)
 - Mezzanine debt waterfall logic
-- Jupyter notebook tutorials
-- Additional output formats (Excel reports)
 
 ---
 
-## 📚 Citation
+## 📄 License & Author
 
-```bibtex
-@software{kim2025pf_liquidity_risk,
-  author = {Kim, Minsung},
-  title = {PF Liquidity Risk: Monte Carlo Simulation Framework for Real Estate Project Finance},
-  year = {2025},
-  url = {https://github.com/aestim/real-estate-pf-liquidity-risk},
-  note = {Stochastic analysis of refinancing risk in leveraged commercial real estate development}
-}
-```
-
----
-
-## 📧 Contact
-
-**Author:** Minsung Kim  
-**Repository:** [github.com/aestim/real-estate-pf-liquidity-risk](https://github.com/aestim/real-estate-pf-liquidity-risk)  
-**Issues:** [GitHub Issues](https://github.com/aestim/real-estate-pf-liquidity-risk/issues)
-
----
-
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) file for details
+MIT License — see [LICENSE](LICENSE). Built by **Minsung Kim**.
 
 ---
 
