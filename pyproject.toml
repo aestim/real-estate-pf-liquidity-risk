@@ -5,7 +5,7 @@ build-backend = "flit_core.buildapi"
 [project]
 name = "pf_liquidity_risk"
 version = "0.0.1"
-description = "A data-driven liquidity risk assessment and cash-flow simulation for a $20M+ highly leveraged real estate PF project, analyzing DSCR and equity runway under occupancy delays."
+description = "Monte Carlo liquidity-risk framework for highly leveraged real estate project finance: models refinancing-failure probability and equity IRR under stochastic rates, revenue, and construction delay (illustrative case)."
 authors = [
   { name = "Minsung Kim" },
 ]
