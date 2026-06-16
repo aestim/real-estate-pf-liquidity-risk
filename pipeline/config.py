@@ -5,6 +5,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load secrets (e.g. ECOS_API_KEY) from a local .env file if present.
+# .env is gitignored, so keys never get committed.
+load_dotenv()
+
 # Repo-relative paths (this file lives in <repo>/pipeline/config.py)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
