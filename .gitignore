@@ -210,3 +210,5 @@ cython_debug/
 .pypirc
 
 pf_liquidity_risk/configs/private_config.py
+# dbt local user id (telemetry)
+dbt/.user.yml
