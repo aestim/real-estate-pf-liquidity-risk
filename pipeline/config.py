@@ -18,7 +18,7 @@ DATA_DIR = REPO_ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 REPORTS_DIR = REPO_ROOT / "reports"
-SQL_DIR = Path(__file__).resolve().parent / "sql"
+DBT_DIR = REPO_ROOT / "dbt"
 
 # Artifacts
 RATES_RAW_CSV = RAW_DIR / "interest_rates.csv"  # extract output

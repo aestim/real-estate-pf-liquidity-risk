@@ -9,15 +9,16 @@ from pf_liquidity_risk.config import FIGURES_DIR
 # Import config model (no circular dependency)
 from pf_liquidity_risk.modeling.config_model import PFConfig
 
-# Import public config by default - can be overridden for internal use
+# Use the public (normalized/illustrative) config by default. A local, optional
+# private_config.py (gitignored) can override it for internal use.
 try:
     from pf_liquidity_risk.configs import private_config as config_module
 
-    print("[CONFIG] Using private configuration (real data)")
+    print("[CONFIG] Using local override configuration")
 except ImportError:
     from pf_liquidity_risk.configs import public_config as config_module
 
-    print("[CONFIG] Using public configuration (normalized data)")
+    print("[CONFIG] Using public (normalized) configuration")
 
 
 # ==========================================

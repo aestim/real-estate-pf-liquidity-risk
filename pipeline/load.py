@@ -1,8 +1,11 @@
 """
-LOAD stage: load the Parquet landing file into a DuckDB warehouse and build a
-star schema (fact_scenario + dim_batch + dim_outcome) via schema.sql.
+LOAD stage: land the Parquet file into DuckDB as the raw table `raw_scenarios`.
 
-Output: data/processed/pf_warehouse.duckdb
+This stage only lands raw data (EL of "ELT"); all modeling — staging, dims,
+fact, marts — is owned by dbt (the T), so there is a single source of truth for
+transforms. Run `transform` (or `dbt build`) after this.
+
+Output: data/processed/pf_warehouse.duckdb  (table: raw_scenarios)
 """
 
 from __future__ import annotations
@@ -25,13 +28,8 @@ def load() -> None:
             "CREATE OR REPLACE TABLE raw_scenarios AS SELECT * FROM read_parquet(?)",
             [str(config.SIM_PARQUET)],
         )
-        con.execute((config.SQL_DIR / "schema.sql").read_text())
-
-        rows = con.execute("SELECT COUNT(*) FROM fact_scenario").fetchone()[0]
-        batches = con.execute("SELECT COUNT(*) FROM dim_batch").fetchone()[0]
-        logger.success(
-            "Loaded {} fact rows across {} batch(es) -> {}", rows, batches, config.DUCKDB_PATH
-        )
+        rows = con.execute("SELECT COUNT(*) FROM raw_scenarios").fetchone()[0]
+        logger.success("Landed {} rows -> raw_scenarios in {}", rows, config.DUCKDB_PATH)
     finally:
         con.close()
 

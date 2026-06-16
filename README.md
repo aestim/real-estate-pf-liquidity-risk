@@ -2,7 +2,6 @@
 
 ## Stochastic Cash Flow Modeling & Monte Carlo Risk Analysis
 
-[![CCDS Project template](https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter)](https://cookiecutter-data-science.drivendata.org/)
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://real-estate-pf-liquidity-risk.streamlit.app/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -208,8 +207,8 @@ flowchart LR
     E[extract<br/>BOK ECOS CD-91d<br/>+ offline fallback]:::stage --> V[validate<br/>data-quality gate]:::stage
     V --> C[calibrate<br/>history → triangular params]:::stage
     C --> S[simulate<br/>Monte Carlo → Parquet]:::stage
-    S --> L[load<br/>DuckDB star schema]:::stage
-    L --> T[transform<br/>SQL / dbt marts → CSV]:::stage
+    S --> L[load<br/>DuckDB raw landing]:::stage
+    L --> T[transform<br/>dbt models + tests → CSV]:::stage
 ```
 
 | Stage | Module | What it does |
@@ -218,19 +217,20 @@ flowchart LR
 | **Validate** | `pipeline/validate.py` | **Data-quality gate**: fails fast on bad source data (out-of-range rates, nulls, duplicate/unsorted dates, too few rows) before it flows downstream. |
 | **Calibrate** | `pipeline/calibrate.py` | Derives triangular `(min, mode, max)` rate params from the history (p10 / median / p90) plus a documented PF spread — replacing hard-coded rates. |
 | **Simulate** | `pipeline/simulate.py` | Runs the Monte Carlo engine with calibrated params, tags each run with a `batch_id`, writes **Parquet**. |
-| **Load** | `pipeline/load.py` + `sql/schema.sql` | Loads Parquet into **DuckDB** and builds a star schema: `fact_scenario`, `dim_batch`, `dim_outcome`. |
-| **Transform** | `pipeline/transform.py` + `sql/mart_*.sql` | Runs SQL marts (outcome summary, IRR percentiles, survival curve) and exports CSVs for BI/README. |
+| **Load** | `pipeline/load.py` | Lands the Parquet into **DuckDB** as the raw table `raw_scenarios` (EL only — modeling is owned by dbt). |
+| **Transform** | `pipeline/transform.py` → **dbt** | Runs the dbt project (`dbt build`): models `raw → staging → dims/fact → marts` and runs data tests, then exports marts to CSV. |
 
 ### Transform layer — dbt (`dbt/`)
 
-The SQL modeling is also implemented as a **dbt (dbt-duckdb)** project — the
-production-grade transform layer. It models `raw_scenarios → staging → dims/fact
-→ marts` with `{{ ref() }}` lineage and ships **13 data tests**
-(`not_null`, `unique`, `accepted_values`, `relationships`, and a singular range test).
+All modeling lives in a single **dbt (dbt-duckdb)** project. It models
+`raw_scenarios → staging → dims/fact → marts` with `{{ ref() }}` lineage and ships
+**13 data tests** (`not_null`, `unique`, `accepted_values`, `relationships`, and a
+singular range test). The `transform` stage invokes `dbt build`; you can also run
+it directly:
 
 ```bash
-python -m pipeline.cli run --offline   # build the DuckDB warehouse first
-cd dbt && dbt build --profiles-dir .    # run dbt models + tests
+python -m pipeline.cli run --offline    # full pipeline (load + dbt build)
+cd dbt && dbt build --profiles-dir .     # or run dbt on its own
 ```
 
 ### Run it
@@ -250,7 +250,7 @@ python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER
 
 - **Idempotent stages** — every load rebuilds tables with `CREATE OR REPLACE`; re-runs are safe.
 - **Data-quality gate** — source data is validated before it flows downstream (fail-fast).
-- **SQL-first modeling** — marts as plain `.sql`, plus a full **dbt** project with lineage + 13 data tests.
+- **ELT with dbt** — load lands raw data; dbt owns modeling (staging → dims/fact → marts) with lineage + 13 data tests.
 - **Deterministic CI** — GitHub Actions runs ruff + pytest + offline pipeline + `dbt build` on every push.
 - **Containerized** — `Dockerfile` runs the whole pipeline with zero secrets.
 - **Separation of raw / processed** — Parquet landing layer, DuckDB warehouse, CSV marts.
@@ -350,10 +350,9 @@ python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER
 │   ├── calibrate.py             # CALIBRATE (history → params)
 │   ├── validate.py              # VALIDATE (data-quality gate)
 │   ├── simulate.py              # SIMULATE (→ Parquet)
-│   ├── load.py                  # LOAD (→ DuckDB star schema)
-│   ├── transform.py             # TRANSFORM (SQL marts → CSV)
-│   ├── cli.py                   # typer orchestration CLI
-│   └── sql/                     # schema.sql + mart_*.sql
+│   ├── load.py                  # LOAD (Parquet → DuckDB raw_scenarios)
+│   ├── transform.py             # TRANSFORM (invokes dbt build → CSV export)
+│   └── cli.py                   # typer orchestration CLI
 ├── dbt/                         # dbt (duckdb) transform layer + tests
 │   ├── models/{staging,marts}/  # staging → dims/fact → marts
 │   └── tests/                   # singular data tests

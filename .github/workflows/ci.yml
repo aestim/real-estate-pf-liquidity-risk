@@ -31,9 +31,5 @@ jobs:
       - name: Run tests
         run: pytest -q
 
-      - name: Pipeline smoke test (offline)
+      - name: Pipeline smoke test (offline, includes dbt build + tests)
         run: python -m pipeline.cli run --offline --iterations 1000
-
-      - name: dbt build + tests (against the warehouse)
-        working-directory: dbt
-        run: dbt build --profiles-dir .

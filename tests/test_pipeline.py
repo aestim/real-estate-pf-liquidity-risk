@@ -63,9 +63,10 @@ def test_full_pipeline_offline_builds_warehouse():
     assert counts["mart_outcome_summary"] >= 1
     assert counts["mart_survival_curve"] == 36
 
-    con = duckdb.connect(str(config.DUCKDB_PATH), read_only=True)
+    # dbt-duckdb may hold an in-process connection; open with matching config.
+    con = duckdb.connect(str(config.DUCKDB_PATH))
     try:
-        facts = con.execute("SELECT COUNT(*) FROM fact_scenario").fetchone()[0]
+        facts = con.execute("SELECT COUNT(*) FROM fct_scenario").fetchone()[0]
         assert facts == 800
 
         # outcome percentages must sum to ~100 within each batch
