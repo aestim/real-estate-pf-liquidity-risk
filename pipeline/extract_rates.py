@@ -39,8 +39,10 @@ def _from_ecos(api_key: str, timeout: int = 15) -> pd.DataFrame:
 
     rows = payload["StatisticSearch"]["row"]
     df = pd.DataFrame(rows)[["TIME", "DATA_VALUE"]]
-    # TIME is YYYYMM for monthly cycle
-    df["date"] = pd.to_datetime(df["TIME"], format="%Y%m", errors="coerce")
+    # TIME is YYYYMMDD (daily) or YYYYMM (monthly) depending on the series cycle.
+    time_str = df["TIME"].astype(str)
+    fmt = "%Y%m%d" if time_str.str.len().max() == 8 else "%Y%m"
+    df["date"] = pd.to_datetime(time_str, format=fmt, errors="coerce")
     df["rate_pct"] = pd.to_numeric(df["DATA_VALUE"], errors="coerce")
     return df[["date", "rate_pct"]]
 

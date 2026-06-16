@@ -36,11 +36,11 @@ ECOS_API_KEY = os.environ.get("ECOS_API_KEY", "")
 # 817Y002 = 시장금리(월,분기,년) — monthly market rates. (722Y001 is the *daily*
 # table and requires cycle "D" + YYYYMMDD dates.) Verify item codes with:
 #   python -m pipeline.cli ecos-items
-ECOS_STAT_CODE = "817Y002"  # market interest rates (monthly)
+ECOS_STAT_CODE = "817Y002"  # market interest rates
 ECOS_ITEM_CODE = "010502000"  # CD(91일)
-ECOS_CYCLE = "M"  # monthly
-ECOS_START = "202001"
-ECOS_END = "203012"
+ECOS_CYCLE = "D"  # this table publishes daily series (verified via ecos-items)
+ECOS_START = "20200101"
+ECOS_END = "20301231"
 ECOS_URL = (
     "https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/1000/"
     "{stat}/{cycle}/{start}/{end}/{item}"
