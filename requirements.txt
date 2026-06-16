@@ -18,4 +18,5 @@ plotly>=5.17.0
 duckdb>=1.0.0
 pyarrow>=14.0.0
 requests>=2.31.0
+dbt-duckdb>=1.7.0
 -e .

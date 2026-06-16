@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: warehouse
+    description: "Raw landing tables produced by the Python pipeline `load` stage."
+    schema: main
+    tables:
+      - name: raw_scenarios
+        description: "One row per simulated scenario, denormalized with batch metadata."

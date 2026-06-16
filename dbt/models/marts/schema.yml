@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: fct_scenario
+    description: "One row per simulated scenario (fact table)."
+    columns:
+      - name: scenario_id
+        tests: [not_null]
+      - name: status
+        description: "Project outcome."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["exit", "refi_fail", "default", "survived_no_exit"]
+          - relationships:
+              to: ref('dim_outcome')
+              field: status
+      - name: month
+        tests: [not_null]
+
+  - name: dim_outcome
+    description: "Outcome status descriptions."
+    columns:
+      - name: status
+        tests: [unique, not_null]
+
+  - name: dim_batch
+    description: "One row per simulation run."
+    columns:
+      - name: batch_id
+        tests: [unique, not_null]
+
+  - name: mart_outcome_summary
+    columns:
+      - name: pct
+        tests: [not_null]
+      - name: n_scenarios
+        tests: [not_null]
+
+  - name: mart_survival_curve
+    columns:
+      - name: survival_rate
+        tests: [not_null]

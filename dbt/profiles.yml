@@ -1,0 +1,9 @@
+# Self-contained profile (run dbt with: dbt build --profiles-dir .)
+# Points at the DuckDB warehouse produced by the `load` pipeline stage.
+pf_liquidity_risk:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('PF_DUCKDB_PATH', '../data/processed/pf_warehouse.duckdb') }}"
+      threads: 1

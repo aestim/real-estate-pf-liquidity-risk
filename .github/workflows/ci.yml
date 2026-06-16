@@ -33,3 +33,7 @@ jobs:
 
       - name: Pipeline smoke test (offline)
         run: python -m pipeline.cli run --offline --iterations 1000
+
+      - name: dbt build + tests (against the warehouse)
+        working-directory: dbt
+        run: dbt build --profiles-dir .

@@ -17,6 +17,7 @@ import pandas as pd
 import requests
 
 from pipeline import config
+from pipeline.validate import validate_rates
 
 
 def _from_ecos(api_key: str, timeout: int = 15) -> pd.DataFrame:
@@ -95,6 +96,9 @@ def extract(offline: bool = False) -> pd.DataFrame:
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df["rate_pct"] = pd.to_numeric(df["rate_pct"], errors="coerce")
     df = df.dropna(subset=["date", "rate_pct"]).sort_values("date").reset_index(drop=True)
+
+    # Quality gate: fail fast on bad source data before it flows downstream.
+    validate_rates(df)
 
     df.to_csv(config.RATES_RAW_CSV, index=False)
     logger.success(

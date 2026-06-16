@@ -205,19 +205,33 @@ simulation run in a **DuckDB analytical warehouse** with a star schema.
 ```mermaid
 flowchart LR
     classDef stage fill:#1e293b,stroke:#64748b,stroke-width:2px,color:#f8fafc
-    E[extract<br/>BOK ECOS CD-91d<br/>+ offline fallback]:::stage --> C[calibrate<br/>history → triangular params]:::stage
+    E[extract<br/>BOK ECOS CD-91d<br/>+ offline fallback]:::stage --> V[validate<br/>data-quality gate]:::stage
+    V --> C[calibrate<br/>history → triangular params]:::stage
     C --> S[simulate<br/>Monte Carlo → Parquet]:::stage
     S --> L[load<br/>DuckDB star schema]:::stage
-    L --> T[transform<br/>SQL marts → CSV]:::stage
+    L --> T[transform<br/>SQL / dbt marts → CSV]:::stage
 ```
 
 | Stage | Module | What it does |
 | :--- | :--- | :--- |
 | **Extract** | `pipeline/extract_rates.py` | Pulls the CD 91-day yield from the Bank of Korea **ECOS** API (the closest public proxy for Korean PF funding cost); falls back to a committed sample so runs are deterministic offline / in CI. |
+| **Validate** | `pipeline/validate.py` | **Data-quality gate**: fails fast on bad source data (out-of-range rates, nulls, duplicate/unsorted dates, too few rows) before it flows downstream. |
 | **Calibrate** | `pipeline/calibrate.py` | Derives triangular `(min, mode, max)` rate params from the history (p10 / median / p90) plus a documented PF spread — replacing hard-coded rates. |
 | **Simulate** | `pipeline/simulate.py` | Runs the Monte Carlo engine with calibrated params, tags each run with a `batch_id`, writes **Parquet**. |
 | **Load** | `pipeline/load.py` + `sql/schema.sql` | Loads Parquet into **DuckDB** and builds a star schema: `fact_scenario`, `dim_batch`, `dim_outcome`. |
 | **Transform** | `pipeline/transform.py` + `sql/mart_*.sql` | Runs SQL marts (outcome summary, IRR percentiles, survival curve) and exports CSVs for BI/README. |
+
+### Transform layer — dbt (`dbt/`)
+
+The SQL modeling is also implemented as a **dbt (dbt-duckdb)** project — the
+production-grade transform layer. It models `raw_scenarios → staging → dims/fact
+→ marts` with `{{ ref() }}` lineage and ships **13 data tests**
+(`not_null`, `unique`, `accepted_values`, `relationships`, and a singular range test).
+
+```bash
+python -m pipeline.cli run --offline   # build the DuckDB warehouse first
+cd dbt && dbt build --profiles-dir .    # run dbt models + tests
+```
 
 ### Run it
 
@@ -235,8 +249,9 @@ python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER
 ### Engineering practices
 
 - **Idempotent stages** — every load rebuilds tables with `CREATE OR REPLACE`; re-runs are safe.
-- **SQL-first modeling** — dimensions and marts are plain `.sql` files (dbt-ready).
-- **Deterministic CI** — GitHub Actions runs ruff + pytest + an offline pipeline smoke test on every push.
+- **Data-quality gate** — source data is validated before it flows downstream (fail-fast).
+- **SQL-first modeling** — marts as plain `.sql`, plus a full **dbt** project with lineage + 13 data tests.
+- **Deterministic CI** — GitHub Actions runs ruff + pytest + offline pipeline + `dbt build` on every push.
 - **Containerized** — `Dockerfile` runs the whole pipeline with zero secrets.
 - **Separation of raw / processed** — Parquet landing layer, DuckDB warehouse, CSV marts.
 
@@ -333,11 +348,15 @@ python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER
 ├── pipeline/                    # data-engineering pipeline
 │   ├── extract_rates.py         # EXTRACT (BOK ECOS + offline fallback)
 │   ├── calibrate.py             # CALIBRATE (history → params)
+│   ├── validate.py              # VALIDATE (data-quality gate)
 │   ├── simulate.py              # SIMULATE (→ Parquet)
 │   ├── load.py                  # LOAD (→ DuckDB star schema)
 │   ├── transform.py             # TRANSFORM (SQL marts → CSV)
 │   ├── cli.py                   # typer orchestration CLI
 │   └── sql/                     # schema.sql + mart_*.sql
+├── dbt/                         # dbt (duckdb) transform layer + tests
+│   ├── models/{staging,marts}/  # staging → dims/fact → marts
+│   └── tests/                   # singular data tests
 ├── tests/                       # pytest (engine + pipeline)
 ├── data/                        # raw / processed (gitignored)
 ├── reports/                     # figures + mart CSV exports

@@ -4,12 +4,15 @@ so they are deterministic and need no network or secrets in CI.
 """
 
 import duckdb
+import pandas as pd
+import pytest
 
 from pipeline import calibrate as calibrate_stage
 from pipeline import config, extract_rates
 from pipeline import load as load_stage
 from pipeline import simulate as simulate_stage
 from pipeline import transform as transform_stage
+from pipeline.validate import DataQualityError, validate_rates
 
 
 def test_extract_offline_returns_clean_frame():
@@ -18,6 +21,27 @@ def test_extract_offline_returns_clean_frame():
     assert list(df.columns) == ["date", "rate_pct"]
     assert df["rate_pct"].notna().all()
     assert config.RATES_RAW_CSV.exists()
+
+
+def test_validate_passes_on_sample():
+    df = extract_rates.extract(offline=True)
+    report = validate_rates(df)
+    assert report["n_rows"] > 0
+    assert "range" in report["checks_passed"]
+
+
+def test_validate_rejects_out_of_range_rate():
+    bad = pd.DataFrame(
+        {"date": pd.date_range("2022-01-01", periods=12, freq="MS"), "rate_pct": [999.0] * 12}
+    )
+    with pytest.raises(DataQualityError):
+        validate_rates(bad)
+
+
+def test_validate_rejects_too_few_rows():
+    bad = pd.DataFrame({"date": pd.to_datetime(["2022-01-01"]), "rate_pct": [3.0]})
+    with pytest.raises(DataQualityError):
+        validate_rates(bad)
 
 
 def test_calibrate_produces_ordered_triangles():

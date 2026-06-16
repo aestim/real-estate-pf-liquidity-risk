@@ -1,0 +1,16 @@
+name: "pf_liquidity_risk"
+version: "1.0.0"
+config-version: 2
+
+profile: "pf_liquidity_risk"
+
+model-paths: ["models"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  pf_liquidity_risk:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
