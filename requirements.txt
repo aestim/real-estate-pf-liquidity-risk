@@ -1,0 +1,17 @@
+ipython
+jupyterlab
+loguru
+matplotlib
+mkdocs
+notebook
+numpy
+pandas
+pip
+pytest
+python-dotenv
+ruff
+tqdm
+typer
+streamlit>=1.28.0
+plotly>=5.17.0
+-e .
