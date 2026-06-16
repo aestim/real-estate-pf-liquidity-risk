@@ -205,7 +205,7 @@ simulation run in a **DuckDB analytical warehouse** with a star schema.
 ```mermaid
 flowchart LR
     classDef stage fill:#1e293b,stroke:#64748b,stroke-width:2px,color:#f8fafc
-    E[extract<br/>FRED rate API<br/>+ offline fallback]:::stage --> C[calibrate<br/>history → triangular params]:::stage
+    E[extract<br/>BOK ECOS CD-91d<br/>+ offline fallback]:::stage --> C[calibrate<br/>history → triangular params]:::stage
     C --> S[simulate<br/>Monte Carlo → Parquet]:::stage
     S --> L[load<br/>DuckDB star schema]:::stage
     L --> T[transform<br/>SQL marts → CSV]:::stage
@@ -213,7 +213,7 @@ flowchart LR
 
 | Stage | Module | What it does |
 | :--- | :--- | :--- |
-| **Extract** | `pipeline/extract_rates.py` | Pulls an interest-rate series from the FRED CSV endpoint; falls back to a committed sample so runs are deterministic offline / in CI. |
+| **Extract** | `pipeline/extract_rates.py` | Pulls the CD 91-day yield from the Bank of Korea **ECOS** API (the closest public proxy for Korean PF funding cost); falls back to a committed sample so runs are deterministic offline / in CI. |
 | **Calibrate** | `pipeline/calibrate.py` | Derives triangular `(min, mode, max)` rate params from the history (p10 / median / p90) plus a documented PF spread — replacing hard-coded rates. |
 | **Simulate** | `pipeline/simulate.py` | Runs the Monte Carlo engine with calibrated params, tags each run with a `batch_id`, writes **Parquet**. |
 | **Load** | `pipeline/load.py` + `sql/schema.sql` | Loads Parquet into **DuckDB** and builds a star schema: `fact_scenario`, `dim_batch`, `dim_outcome`. |
@@ -222,7 +222,7 @@ flowchart LR
 ### Run it
 
 ```bash
-# Full pipeline (uses live FRED data, falls back to sample if offline)
+# Full pipeline (uses live BOK ECOS data if ECOS_API_KEY is set, else sample)
 python -m pipeline.cli run
 
 # Fully offline & deterministic (used in CI)
@@ -331,7 +331,7 @@ python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER
 │   │   └── public_config.py     # Normalized / illustrative params
 │   └── app.py                   # Streamlit dashboard
 ├── pipeline/                    # data-engineering pipeline
-│   ├── extract_rates.py         # EXTRACT (FRED + offline fallback)
+│   ├── extract_rates.py         # EXTRACT (BOK ECOS + offline fallback)
 │   ├── calibrate.py             # CALIBRATE (history → params)
 │   ├── simulate.py              # SIMULATE (→ Parquet)
 │   ├── load.py                  # LOAD (→ DuckDB star schema)

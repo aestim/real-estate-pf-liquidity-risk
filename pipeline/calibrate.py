@@ -46,7 +46,7 @@ def calibrate(rates: pd.DataFrame | None = None) -> dict:
         raise ValueError("No usable rate observations to calibrate from.")
 
     params = {
-        "source_series": config.FRED_SERIES_ID,
+        "source_series": config.RATE_SOURCE_NAME,
         "n_observations": int(s.shape[0]),
         "anchor_median_pct": round(float(s.median()), 3),
         "pre_refi_rate": _triangle(s, config.PF_SPREAD_PRE_REFI),

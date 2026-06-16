@@ -1,16 +1,16 @@
 """
-EXTRACT stage: pull an interest-rate history.
+EXTRACT stage: pull a Korean interest-rate history.
 
-Tries the live FRED CSV endpoint (no API key required). If the network is
-unavailable (offline dev, CI without egress, rate limits), it falls back to a
-committed sample CSV so the pipeline is always runnable and deterministic.
+Primary source is the Bank of Korea ECOS API (CD 91-day yield), which is the
+closest public proxy for Korean PF / bridge-loan funding cost. The live call
+needs a free ECOS API key (env ECOS_API_KEY). When the key or network is
+unavailable (offline dev, CI without secrets), it falls back to a committed
+sample CSV so the pipeline is always runnable and deterministic.
 
 Output: data/raw/interest_rates.csv  (columns: date, rate_pct)
 """
 
 from __future__ import annotations
-
-import io
 
 from loguru import logger
 import pandas as pd
@@ -19,15 +19,30 @@ import requests
 from pipeline import config
 
 
-def _from_fred(series: str, timeout: int = 15) -> pd.DataFrame:
-    url = config.FRED_CSV_URL.format(series=series)
-    logger.info("Fetching rate series '{}' from FRED...", series)
+def _from_ecos(api_key: str, timeout: int = 15) -> pd.DataFrame:
+    url = config.ECOS_URL.format(
+        key=api_key,
+        stat=config.ECOS_STAT_CODE,
+        cycle=config.ECOS_CYCLE,
+        start=config.ECOS_START,
+        end=config.ECOS_END,
+        item=config.ECOS_ITEM_CODE,
+    )
+    logger.info("Fetching CD(91-day) from BOK ECOS...")
     resp = requests.get(url, timeout=timeout)
     resp.raise_for_status()
-    df = pd.read_csv(io.StringIO(resp.text))
-    # FRED returns columns: DATE, <SERIES_ID>
-    df.columns = ["date", "rate_pct"]
-    return df
+    payload = resp.json()
+
+    if "StatisticSearch" not in payload:
+        # ECOS returns an error object (e.g., bad key) instead of data
+        raise ValueError(f"ECOS error response: {payload}")
+
+    rows = payload["StatisticSearch"]["row"]
+    df = pd.DataFrame(rows)[["TIME", "DATA_VALUE"]]
+    # TIME is YYYYMM for monthly cycle
+    df["date"] = pd.to_datetime(df["TIME"], format="%Y%m", errors="coerce")
+    df["rate_pct"] = pd.to_numeric(df["DATA_VALUE"], errors="coerce")
+    return df[["date", "rate_pct"]]
 
 
 def _from_sample() -> pd.DataFrame:
@@ -37,18 +52,19 @@ def _from_sample() -> pd.DataFrame:
     return df
 
 
-def extract(series: str | None = None, offline: bool = False) -> pd.DataFrame:
+def extract(offline: bool = False) -> pd.DataFrame:
     """Return a cleaned rate history and write it to RATES_RAW_CSV."""
     config.ensure_dirs()
-    series = series or config.FRED_SERIES_ID
 
-    if offline:
+    if offline or not config.ECOS_API_KEY:
+        if not offline:
+            logger.warning("No ECOS_API_KEY set; using sample data.")
         df = _from_sample()
     else:
         try:
-            df = _from_fred(series)
-        except Exception as exc:  # network/parse errors -> deterministic fallback
-            logger.warning("Live fetch failed ({}); using sample data.", exc)
+            df = _from_ecos(config.ECOS_API_KEY)
+        except Exception as exc:  # network/parse/auth errors -> deterministic fallback
+            logger.warning("Live ECOS fetch failed ({}); using sample data.", exc)
             df = _from_sample()
 
     # --- clean ---
