@@ -33,7 +33,10 @@ DUCKDB_PATH = PROCESSED_DIR / "pf_warehouse.duckdb"  # load target
 # (env ECOS_API_KEY); without it the pipeline falls back to committed sample data.
 RATE_SOURCE_NAME = "BOK ECOS — CD(91-day)"
 ECOS_API_KEY = os.environ.get("ECOS_API_KEY", "")
-ECOS_STAT_CODE = "722Y001"  # 시장금리 (market interest rates) table
+# 817Y002 = 시장금리(월,분기,년) — monthly market rates. (722Y001 is the *daily*
+# table and requires cycle "D" + YYYYMMDD dates.) Verify item codes with:
+#   python -m pipeline.cli ecos-items
+ECOS_STAT_CODE = "817Y002"  # market interest rates (monthly)
 ECOS_ITEM_CODE = "010502000"  # CD(91일)
 ECOS_CYCLE = "M"  # monthly
 ECOS_START = "202001"
@@ -42,6 +45,7 @@ ECOS_URL = (
     "https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/1/1000/"
     "{stat}/{cycle}/{start}/{end}/{item}"
 )
+ECOS_ITEMLIST_URL = "https://ecos.bok.or.kr/api/StatisticItemList/{key}/json/kr/1/200/{stat}"
 
 # PF spread added on top of the CD anchor to approximate Korean PF lending rates.
 # Illustrative, documented assumption (bridge/construction loans price well above CD).

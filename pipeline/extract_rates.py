@@ -45,6 +45,28 @@ def _from_ecos(api_key: str, timeout: int = 15) -> pd.DataFrame:
     return df[["date", "rate_pct"]]
 
 
+def list_items(stat_code: str | None = None, timeout: int = 15) -> pd.DataFrame:
+    """Discovery helper: list available item codes/names for an ECOS stat table.
+
+    Use this to confirm the right ITEM_CODE/CYCLE when a search returns
+    'INFO-200 해당하는 데이터가 없습니다'.
+    """
+    stat_code = stat_code or config.ECOS_STAT_CODE
+    if not config.ECOS_API_KEY:
+        raise RuntimeError("ECOS_API_KEY not set (put it in .env).")
+    url = config.ECOS_ITEMLIST_URL.format(key=config.ECOS_API_KEY, stat=stat_code)
+    resp = requests.get(url, timeout=timeout)
+    resp.raise_for_status()
+    payload = resp.json()
+    if "StatisticItemList" not in payload:
+        raise ValueError(f"ECOS error response: {payload}")
+    rows = payload["StatisticItemList"]["row"]
+    cols = [
+        c for c in ("ITEM_CODE", "ITEM_NAME", "CYCLE", "START_TIME", "END_TIME") if c in rows[0]
+    ]
+    return pd.DataFrame(rows)[cols]
+
+
 def _from_sample() -> pd.DataFrame:
     logger.warning("Falling back to committed sample data: {}", config.SAMPLE_RATES_CSV)
     df = pd.read_csv(config.SAMPLE_RATES_CSV)

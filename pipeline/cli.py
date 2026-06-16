@@ -38,6 +38,13 @@ def calibrate():
     calibrate_stage.calibrate()
 
 
+@app.command("ecos-items")
+def ecos_items(stat: str = config.ECOS_STAT_CODE):
+    """List ECOS item codes for a stat table (to confirm the right rate series)."""
+    df = extract_rates.list_items(stat)
+    print(df.to_string(index=False))
+
+
 @app.command()
 def simulate(iterations: int = 30000, seed: int = 42):
     """SIMULATE: run Monte Carlo, write Parquet."""
