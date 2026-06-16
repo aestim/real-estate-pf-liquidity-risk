@@ -26,9 +26,13 @@ def test_config_is_well_formed(cfg):
     assert 0 < cfg.cap_rate < 1
     assert cfg.completion_target_month < cfg.court_opening_month < cfg.exit_month
     # Triangular params must be ordered (min <= mode <= max)
-    for lo, mode, hi in (cfg.pre_refi_rate, cfg.post_refi_rate,
-                         cfg.stabilization_revenue_dist, cfg.post_court_revenue_dist,
-                         cfg.target_refi_ltv_dist):
+    for lo, mode, hi in (
+        cfg.pre_refi_rate,
+        cfg.post_refi_rate,
+        cfg.stabilization_revenue_dist,
+        cfg.post_court_revenue_dist,
+        cfg.target_refi_ltv_dist,
+    ):
         assert lo <= mode <= hi
 
 

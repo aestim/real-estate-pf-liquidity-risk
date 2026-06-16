@@ -25,7 +25,7 @@ class PFConfig:
     # Modeled as triangular distributions to reflect occupancy and market rent uncertainty.
     stabilization_revenue_dist: Tuple[float, float, float]
     post_court_revenue_dist: Tuple[float, float, float]
-    
+
     # Capitalization rate for Income Approach valuation
     cap_rate: float = 0.055
 
@@ -41,18 +41,18 @@ class PFConfig:
     # Refinancing & Exit Constraints
     target_refi_ltv_dist: Tuple[float, float, float] = (0.70, 0.80, 0.85)
     exit_cost_range: Tuple[float, float] = (0.01, 0.02)  # Transaction costs (1-2%)
-    
+
     # Metadata for display
     config_type: str = "unknown"
     display_currency: str = "Index"
-    
+
     # Internal mapping for interest capitalization ratios
     # Defined in __post_init__ to avoid type check errors with default values.
     capitalized_ratio_map: Dict[str, float] = field(default_factory=dict, init=False)
 
     def __post_init__(self):
         self.capitalized_ratio_map = {
-            "construction": 1.0,   # Full interest capitalization during building
+            "construction": 1.0,  # Full interest capitalization during building
             "stabilization": 0.4,  # Partial capitalization during ramp-up
-            "exit": 0.0            # No capitalization post-exit/court-opening
+            "exit": 0.0,  # No capitalization post-exit/court-opening
         }

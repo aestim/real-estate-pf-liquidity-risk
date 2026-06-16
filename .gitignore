@@ -1,5 +1,16 @@
-# Data
-/data/
+# Data (generated artifacts ignored; keep the committed sample fallback)
+/data/*
+!/data/raw/
+/data/raw/*
+!/data/raw/sample_interest_rates.csv
+
+# Generated warehouse / pipeline outputs
+*.duckdb
+*.parquet
+reports/mart_*.csv
+
+# Editors
+.vscode/
 
 # Mac OS-specific storage files
 .DS_Store

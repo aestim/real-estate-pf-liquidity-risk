@@ -196,6 +196,52 @@ flowchart LR
 
 ---
 
+## 🧱 Data Pipeline (ETL → Warehouse → Marts)
+
+Beyond the simulation itself, the project ships a reproducible data pipeline that
+turns a **real interest-rate source** into model parameters and lands every
+simulation run in a **DuckDB analytical warehouse** with a star schema.
+
+```mermaid
+flowchart LR
+    classDef stage fill:#1e293b,stroke:#64748b,stroke-width:2px,color:#f8fafc
+    E[extract<br/>FRED rate API<br/>+ offline fallback]:::stage --> C[calibrate<br/>history → triangular params]:::stage
+    C --> S[simulate<br/>Monte Carlo → Parquet]:::stage
+    S --> L[load<br/>DuckDB star schema]:::stage
+    L --> T[transform<br/>SQL marts → CSV]:::stage
+```
+
+| Stage | Module | What it does |
+| :--- | :--- | :--- |
+| **Extract** | `pipeline/extract_rates.py` | Pulls an interest-rate series from the FRED CSV endpoint; falls back to a committed sample so runs are deterministic offline / in CI. |
+| **Calibrate** | `pipeline/calibrate.py` | Derives triangular `(min, mode, max)` rate params from the history (p10 / median / p90) plus a documented PF spread — replacing hard-coded rates. |
+| **Simulate** | `pipeline/simulate.py` | Runs the Monte Carlo engine with calibrated params, tags each run with a `batch_id`, writes **Parquet**. |
+| **Load** | `pipeline/load.py` + `sql/schema.sql` | Loads Parquet into **DuckDB** and builds a star schema: `fact_scenario`, `dim_batch`, `dim_outcome`. |
+| **Transform** | `pipeline/transform.py` + `sql/mart_*.sql` | Runs SQL marts (outcome summary, IRR percentiles, survival curve) and exports CSVs for BI/README. |
+
+### Run it
+
+```bash
+# Full pipeline (uses live FRED data, falls back to sample if offline)
+python -m pipeline.cli run
+
+# Fully offline & deterministic (used in CI)
+python -m pipeline.cli run --offline --iterations 10000
+
+# Ad-hoc SQL against the warehouse
+python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER BY pct DESC"
+```
+
+### Engineering practices
+
+- **Idempotent stages** — every load rebuilds tables with `CREATE OR REPLACE`; re-runs are safe.
+- **SQL-first modeling** — dimensions and marts are plain `.sql` files (dbt-ready).
+- **Deterministic CI** — GitHub Actions runs ruff + pytest + an offline pipeline smoke test on every push.
+- **Containerized** — `Dockerfile` runs the whole pipeline with zero secrets.
+- **Separation of raw / processed** — Parquet landing layer, DuckDB warehouse, CSV marts.
+
+---
+
 ## 💼 Use Cases
 
 ### For Developers
@@ -277,14 +323,26 @@ flowchart LR
 ## 📁 Project Structure
 
 ```text
-├── pf_liquidity_risk/
+├── pf_liquidity_risk/           # simulation engine + dashboard
 │   ├── modeling/
-│   │   ├── config_model.py    # PFConfig dataclass
-│   │   └── train.py            # Monte Carlo engine
+│   │   ├── config_model.py      # PFConfig dataclass
+│   │   └── train.py             # Monte Carlo engine
 │   ├── configs/
-│   │   └── public_config.py    # Normalized / illustrative params
-│   └── app.py                  # Streamlit dashboard
-├── reports/figures/            # Output visualizations
+│   │   └── public_config.py     # Normalized / illustrative params
+│   └── app.py                   # Streamlit dashboard
+├── pipeline/                    # data-engineering pipeline
+│   ├── extract_rates.py         # EXTRACT (FRED + offline fallback)
+│   ├── calibrate.py             # CALIBRATE (history → params)
+│   ├── simulate.py              # SIMULATE (→ Parquet)
+│   ├── load.py                  # LOAD (→ DuckDB star schema)
+│   ├── transform.py             # TRANSFORM (SQL marts → CSV)
+│   ├── cli.py                   # typer orchestration CLI
+│   └── sql/                     # schema.sql + mart_*.sql
+├── tests/                       # pytest (engine + pipeline)
+├── data/                        # raw / processed (gitignored)
+├── reports/                     # figures + mart CSV exports
+├── .github/workflows/ci.yml     # ruff + pytest + pipeline smoke test
+├── Dockerfile
 ├── requirements.txt
 └── README.md
 ```
