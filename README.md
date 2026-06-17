@@ -129,6 +129,8 @@ flowchart LR
 - **95% VaR:** 100.0% of initial equity (Full loss potential in refi failure scenarios)
 - **Median IRR (exits):** 50.0% annualized (High-risk, high-reward profile)
 
+> *IRR here is the annualized return on equity (CAGR). With a single equity outflow at t0 and a single exit payout (no interim distributions), this equals the IRR of that cash-flow profile.*
+
 ---
 
 ## 🔧 Interactive Dashboard Features

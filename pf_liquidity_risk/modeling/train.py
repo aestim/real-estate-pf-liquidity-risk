@@ -128,6 +128,9 @@ class PFInvestmentModel:
                 exit_equity = final_val - principal - exit_cost
 
                 if exit_equity > 0:
+                    # Annualized return on equity. With a single equity outflow at
+                    # t0 and a single payout at exit (no interim distributions),
+                    # this CAGR equals the IRR of that cash-flow profile.
                     total_return = exit_equity / self.cfg.initial_equity
                     years = m / 12
                     irr = (total_return ** (1 / years)) - 1
