@@ -11,10 +11,12 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ["exit", "refi_fail", "default", "survived_no_exit"]
+              arguments:
+                values: ["exit", "refi_fail", "default", "survived_no_exit"]
           - relationships:
-              to: ref('dim_outcome')
-              field: status
+              arguments:
+                to: ref('dim_outcome')
+                field: status
       - name: month
         tests: [not_null]
 
