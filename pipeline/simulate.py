@@ -19,7 +19,7 @@ from loguru import logger
 import pandas as pd
 
 from pf_liquidity_risk.configs import public_config
-from pf_liquidity_risk.modeling.train import run_simulation
+from pf_liquidity_risk.modeling.engine import run_simulation
 from pipeline import config
 
 

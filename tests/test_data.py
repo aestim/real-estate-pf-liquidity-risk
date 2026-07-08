@@ -10,7 +10,7 @@ import pytest
 
 from pf_liquidity_risk.configs import public_config
 from pf_liquidity_risk.modeling.config_model import PFConfig
-from pf_liquidity_risk.modeling.train import PFInvestmentModel, run_simulation
+from pf_liquidity_risk.modeling.engine import PFInvestmentModel, run_simulation
 
 VALID_STATUSES = {"exit", "default", "refi_fail", "survived_no_exit"}
 
@@ -24,21 +24,20 @@ def test_config_is_well_formed(cfg):
     assert cfg.initial_equity > 0
     assert cfg.senior_loan > 0
     assert 0 < cfg.cap_rate < 1
-    assert cfg.completion_target_month < cfg.court_opening_month < cfg.exit_month
+    assert cfg.completion_target_month < cfg.demand_driver_opening_month < cfg.exit_month
     # Triangular params must be ordered (min <= mode <= max)
     for lo, mode, hi in (
         cfg.pre_refi_rate,
         cfg.post_refi_rate,
         cfg.stabilization_revenue_dist,
-        cfg.post_court_revenue_dist,
+        cfg.post_opening_revenue_dist,
         cfg.target_refi_ltv_dist,
     ):
         assert lo <= mode <= hi
 
 
 def test_single_path_returns_valid_status(cfg):
-    np.random.seed(0)
-    result = PFInvestmentModel(cfg).simulate_path()
+    result = PFInvestmentModel(cfg, np.random.default_rng(0)).simulate_path()
     assert result["status"] in VALID_STATUSES
     assert 1 <= result["month"] <= cfg.exit_month
     assert result["final_equity"] >= 0
@@ -74,6 +73,18 @@ def test_lower_leverage_improves_survival(cfg):
     high_fail = high_lev["status"].value_counts(normalize=True).get("refi_fail", 0)
     low_fail = low_lev["status"].value_counts(normalize=True).get("refi_fail", 0)
     assert low_fail < high_fail
+
+
+def test_refi_failure_recovery_is_bounded(cfg):
+    """Failed refi -> distressed sale: recovery must be non-negative and IRR >= -100%."""
+    df, _ = run_simulation(iterations=3000, seed=42, config=cfg)
+    fails = df[df["status"] == "refi_fail"]
+    if not fails.empty:
+        assert (fails["final_equity"] >= 0).all()
+        assert (fails["irr"] >= -1.0).all()
+        # Distressed sale of a leveraged asset should not beat the exit path's
+        # typical outcome: median recovery stays below initial equity.
+        assert fails["final_equity"].median() < cfg.initial_equity
 
 
 def test_exit_cases_have_finite_irr(cfg):

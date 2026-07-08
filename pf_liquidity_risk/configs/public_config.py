@@ -18,7 +18,7 @@ def get_config() -> PFConfig:
         monthly_fixed_cost=1.79,
         # Monthly Revenue Distributions (Indexed)
         stabilization_revenue_dist=(0.89, 2.14, 2.68),
-        post_court_revenue_dist=(2.14, 3.57, 4.46),
+        post_opening_revenue_dist=(2.14, 3.57, 4.46),
         config_type="PUBLIC (Normalized)",
         display_currency="Index",
     )

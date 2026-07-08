@@ -4,6 +4,8 @@ Interactive PF Liquidity Risk Dashboard
 Run with: streamlit run pf_liquidity_risk/app.py
 """
 
+import json
+from pathlib import Path
 import time
 
 import numpy as np
@@ -13,7 +15,7 @@ import streamlit as st
 
 # Import your simulation components
 from pf_liquidity_risk.modeling.config_model import PFConfig
-from pf_liquidity_risk.modeling.train import PFInvestmentModel
+from pf_liquidity_risk.modeling.engine import PFInvestmentModel
 
 # ==========================================
 # Translations
@@ -94,7 +96,9 @@ TRANSLATIONS = {
         "metric": "Metric",
         "value": "Value",
         "expected_loss": "Expected Loss",
-        "sharpe_ratio": "Sharpe Ratio",
+        "sharpe_ratio": "IRR Mean/Std (exits only)",
+        "invalid_triangle": "⚠️ Invalid distribution (requires Min ≤ Mode ≤ Max): {}",
+        "calibrated_note": "Rate defaults calibrated from: {}",
         "success_rate": "Success Rate",
         "simulation_results": "Simulation Results (First 100 rows)",
         "download_csv": "📥 Download Full Results (CSV)",
@@ -124,8 +128,8 @@ TRANSLATIONS = {
         "project_timeline": "Timeline Configuration",
         "completion_target": "Target Completion Month",
         "completion_help": "Expected month of construction completion",
-        "court_opening": "Demand Driver Opening Month",
-        "court_opening_help": "Month when the external demand driver opens",
+        "demand_driver_opening": "Demand Driver Opening Month",
+        "demand_driver_opening_help": "Month when the external demand driver opens",
         "exit_month": "Exit Month",
         "exit_help": "Target month for project exit/sale",
         "timeline_summary": "Timeline Summary",
@@ -159,7 +163,7 @@ TRANSLATIONS = {
         "leverage": "레버리지",
         "revenue_assumptions": "📈 매출 가정",
         "stabilization_phase": "안정화 단계 매출",
-        "post_opening": "개원 후 매출",
+        "post_opening": "오픈 후 매출",
         "min": "최소",
         "mode": "최빈",
         "max": "최대",
@@ -215,7 +219,9 @@ TRANSLATIONS = {
         "metric": "지표",
         "value": "값",
         "expected_loss": "기대손실",
-        "sharpe_ratio": "Sharpe Ratio",
+        "sharpe_ratio": "IRR 평균/표준편차 (Exit 한정)",
+        "invalid_triangle": "⚠️ 분포 설정 오류 (최소 ≤ 최빈 ≤ 최대 필요): {}",
+        "calibrated_note": "금리 기본값 캘리브레이션 출처: {}",
         "success_rate": "성공률",
         "simulation_results": "시뮬레이션 결과 (처음 100행)",
         "download_csv": "📥 전체 결과 다운로드 (CSV)",
@@ -245,14 +251,14 @@ TRANSLATIONS = {
         "project_timeline": "타임라인 설정",
         "completion_target": "목표 준공 시점",
         "completion_help": "예상 준공 완료 개월",
-        "court_opening": "수요시설 개원 시점",
-        "court_opening_help": "외부 수요시설 개원 개월 (수요 발생 시점)",
+        "demand_driver_opening": "수요시설 오픈 시점",
+        "demand_driver_opening_help": "외부 수요시설 오픈 개월 (수요 발생 시점)",
         "exit_month": "Exit 시점",
         "exit_help": "프로젝트 매각/종료 목표 개월",
         "timeline_summary": "타임라인 요약",
         "construction": "건설 단계",
         "stabilization": "안정화 단계",
-        "post_opening_phase": "개원 후 단계",
+        "post_opening_phase": "오픈 후 단계",
         "months_unit": "개월",
         "total_duration": "총 프로젝트 기간",
         "refi_analysis": "💸 전환대출(Refinancing) 심사 분석",
@@ -268,6 +274,36 @@ TRANSLATIONS = {
 def t(key: str, lang: str) -> str:
     """Translation helper function"""
     return TRANSLATIONS[lang].get(key, key)
+
+
+# ==========================================
+# Calibrated Rate Defaults
+# ==========================================
+
+CALIBRATION_JSON = (
+    Path(__file__).resolve().parents[1] / "data" / "processed" / "calibrated_params.json"
+)
+
+
+def _clamp_triangle(tri, lo_bound: float, hi_bound: float):
+    """Clamp a (min, mode, max) tuple into slider bounds, keeping order."""
+    clamped = [round(min(max(v, lo_bound), hi_bound), 3) for v in tri]
+    return tuple(sorted(clamped))
+
+
+def load_calibrated_rates():
+    """
+    Use rates calibrated by the data pipeline (pipeline/calibrate.py) as slider
+    defaults, so the dashboard stays consistent with the BOK ECOS-derived params.
+    Falls back to hard-coded illustrative defaults when no calibration exists.
+    """
+    try:
+        params = json.loads(CALIBRATION_JSON.read_text())
+        pre = _clamp_triangle(params["pre_refi_rate"], 0.03, 0.30)
+        post = _clamp_triangle(params["post_refi_rate"], 0.005, 0.15)
+        return pre, post, params.get("source_series", "calibrated")
+    except (OSError, ValueError, KeyError):
+        return None, None, None
 
 
 # ==========================================
@@ -315,8 +351,8 @@ st.markdown(
 def run_simulation_cached(config_dict: dict, iterations: int, seed: int) -> pd.DataFrame:
     """Run simulation with caching for performance"""
     config = PFConfig(**config_dict)
-    np.random.seed(seed)
-    model = PFInvestmentModel(config)
+    rng = np.random.default_rng(seed)
+    model = PFInvestmentModel(config, rng)
     results = [model.simulate_path() for _ in range(iterations)]
     return pd.DataFrame(results)
 
@@ -424,14 +460,15 @@ def create_irr_histogram(df: pd.DataFrame, lang: str) -> go.Figure:
     return fig
 
 
-def create_survival_curve(df: pd.DataFrame, iterations: int, lang: str) -> go.Figure:
-    """Create survival rate curve"""
-    months = np.arange(1, 37)
+def create_survival_curve(df: pd.DataFrame, lang: str, max_month: int = 36) -> go.Figure:
+    """Create survival rate curve (denominator = actual rows, x-axis = exit month)"""
+    n = len(df)
+    months = np.arange(1, max_month + 1)
     survival_rates = []
 
     for m in months:
         failed = df[df["status"].isin(["default", "refi_fail"]) & (df["month"] <= m)]
-        survival_rates.append((iterations - len(failed)) / iterations)
+        survival_rates.append((n - len(failed)) / n)
 
     fig = go.Figure()
 
@@ -604,12 +641,14 @@ def main():
                 value=340.0,
                 step=10.0,
             )
+            # Default 1.79 matches configs/public_config.py so the dashboard's
+            # baseline run reproduces the README headline results.
             monthly_fixed_cost = st.slider(
                 f"{t('monthly_fixed_cost', lang)} ({t('pct_of_equity', lang)})",
                 min_value=0.2,
                 max_value=3.0,
-                value=0.4,
-                step=0.1,
+                value=1.79,
+                step=0.01,
             )
             currency_display = t("index", lang)
         else:
@@ -729,7 +768,7 @@ def main():
                     * 1e6
                 )
 
-            post_court_revenue_dist = (post_min, post_mode, post_max)
+            post_opening_revenue_dist = (post_min, post_mode, post_max)
 
         st.markdown("---")
 
@@ -738,27 +777,58 @@ def main():
 
         st.info(t("rate_info", lang))
 
+        # Use pipeline-calibrated rates (BOK ECOS) as defaults when available.
+        calib_pre, calib_post, calib_src = load_calibrated_rates()
+        if calib_src:
+            st.caption("📡 " + t("calibrated_note", lang).format(calib_src))
+        pre_d = calib_pre or (0.10, 0.14, 0.18)
+        post_d = calib_post or (0.05, 0.07, 0.09)
+
         with st.expander(t("pre_refi_rates", lang)):
             pre_refi_min = st.slider(
-                t("min_rate", lang), 0.05, 0.20, 0.10, 0.01, key="pre_refi_min", format="%.2f"
+                t("min_rate", lang), 0.03, 0.20, pre_d[0], 0.001, key="pre_refi_min", format="%.3f"
             )
             pre_refi_mode = st.slider(
-                t("mode_rate", lang), 0.08, 0.25, 0.14, 0.01, key="pre_refi_mode", format="%.2f"
+                t("mode_rate", lang),
+                0.03,
+                0.25,
+                pre_d[1],
+                0.001,
+                key="pre_refi_mode",
+                format="%.3f",
             )
             pre_refi_max = st.slider(
-                t("max_rate", lang), 0.10, 0.30, 0.18, 0.01, key="pre_refi_max", format="%.2f"
+                t("max_rate", lang), 0.03, 0.30, pre_d[2], 0.001, key="pre_refi_max", format="%.3f"
             )
             pre_refi_rate = (pre_refi_min, pre_refi_mode, pre_refi_max)
 
         with st.expander(t("post_refi_rates", lang)):
             post_refi_min = st.slider(
-                t("min_rate", lang), 0.03, 0.10, 0.05, 0.01, key="post_refi_min", format="%.2f"
+                t("min_rate", lang),
+                0.005,
+                0.10,
+                post_d[0],
+                0.001,
+                key="post_refi_min",
+                format="%.3f",
             )
             post_refi_mode = st.slider(
-                t("mode_rate", lang), 0.04, 0.12, 0.07, 0.01, key="post_refi_mode", format="%.2f"
+                t("mode_rate", lang),
+                0.005,
+                0.12,
+                post_d[1],
+                0.001,
+                key="post_refi_mode",
+                format="%.3f",
             )
             post_refi_max = st.slider(
-                t("max_rate", lang), 0.06, 0.15, 0.09, 0.01, key="post_refi_max", format="%.2f"
+                t("max_rate", lang),
+                0.005,
+                0.15,
+                post_d[2],
+                0.001,
+                key="post_refi_max",
+                format="%.3f",
             )
             post_refi_rate = (post_refi_min, post_refi_mode, post_refi_max)
 
@@ -777,20 +847,20 @@ def main():
                 help=t("completion_help", lang),
             )
 
-            court_opening_month = st.slider(
-                t("court_opening", lang),
+            demand_driver_opening_month = st.slider(
+                t("demand_driver_opening", lang),
                 min_value=completion_target_month + 2,
                 max_value=48,
                 value=max(24, completion_target_month + 2),
                 step=1,
-                help=t("court_opening_help", lang),
+                help=t("demand_driver_opening_help", lang),
             )
 
             exit_month = st.slider(
                 t("exit_month", lang),
-                min_value=court_opening_month + 2,
+                min_value=demand_driver_opening_month + 2,
                 max_value=60,
-                value=max(36, court_opening_month + 2),
+                value=max(36, demand_driver_opening_month + 2),
                 step=1,
                 help=t("exit_help", lang),
             )
@@ -799,45 +869,54 @@ def main():
             st.markdown(f"""
             **{t("timeline_summary", lang)}**
             - {t("construction", lang)}: 0 → {completion_target_month}{t("months_unit", lang)}
-            - {t("stabilization", lang)}: {completion_target_month} → {court_opening_month}{t("months_unit", lang)}
-            - {t("post_opening_phase", lang)}: {court_opening_month} → {exit_month}{t("months_unit", lang)}
+            - {t("stabilization", lang)}: {completion_target_month} → {demand_driver_opening_month}{t("months_unit", lang)}
+            - {t("post_opening_phase", lang)}: {demand_driver_opening_month} → {exit_month}{t("months_unit", lang)}
             - **{t("total_duration", lang)}**: {exit_month}{t("months_unit", lang)}
             """)
 
         st.markdown("---")
 
-        run_pressed = st.button(
-            t("run_simulation", lang), type="primary", use_container_width=True
-        )
+        run_pressed = st.button(t("run_simulation", lang), type="primary", width="stretch")
 
     # Main Content Area
     # 1. Execute Simulation Data
     if run_pressed:
+        # Guard: np.random.triangular raises if min > mode or mode > max.
+        triangles = {
+            t("stabilization_phase", lang): stabilization_revenue_dist,
+            t("post_opening", lang): post_opening_revenue_dist,
+            t("pre_refi_rates", lang): pre_refi_rate,
+            t("post_refi_rates", lang): post_refi_rate,
+        }
+        invalid = [name for name, (lo, mode, hi) in triangles.items() if not lo <= mode <= hi]
+        if invalid:
+            st.error(t("invalid_triangle", lang).format(", ".join(invalid)))
+            st.stop()
+
         config_dict = {
             "initial_equity": initial_equity,
             "senior_loan": senior_loan,
             "monthly_fixed_cost": monthly_fixed_cost,
             "stabilization_revenue_dist": stabilization_revenue_dist,
-            "post_court_revenue_dist": post_court_revenue_dist,
+            "post_opening_revenue_dist": post_opening_revenue_dist,
             "pre_refi_rate": pre_refi_rate,
             "post_refi_rate": post_refi_rate,
             "completion_target_month": completion_target_month,
-            "court_opening_month": court_opening_month,
+            "demand_driver_opening_month": demand_driver_opening_month,
             "exit_month": exit_month,
             "config_type": "Interactive Dashboard",
             "display_currency": currency_display,
         }
 
         with st.spinner(t("running", lang).format(iterations)):
-            progress_bar = st.progress(0)
             start_time = time.time()
 
             # Run and save to session state
             df = run_simulation_cached(config_dict, iterations, seed)
             st.session_state["df"] = df
             st.session_state["has_run"] = True
+            st.session_state["exit_month"] = exit_month
 
-            progress_bar.progress(100)
             elapsed_time = time.time() - start_time
             st.success(t("completed", lang).format(elapsed_time))
 
@@ -871,7 +950,7 @@ def main():
             if st.button(
                 "📌 " + t("set_base", lang),
                 help=t("set_base_help", lang),
-                use_container_width=True,
+                width="stretch",
             ):
                 st.session_state["base_case"] = {
                     "exit_prob": exit_prob,
@@ -885,9 +964,7 @@ def main():
                 st.rerun()
 
         with col_base3:
-            if st.session_state["base_case"] and st.button(
-                t("reset_base", lang), use_container_width=True
-            ):
+            if st.session_state["base_case"] and st.button(t("reset_base", lang), width="stretch"):
                 st.session_state["base_case"] = None
                 st.rerun()
 
@@ -996,7 +1073,9 @@ def main():
         with col1:
             st.plotly_chart(create_outcome_chart(df, lang), width="stretch", key="chart_outcome")
             st.plotly_chart(
-                create_survival_curve(df, iterations, lang), width="stretch", key="chart_survival"
+                create_survival_curve(df, lang, st.session_state.get("exit_month", 36)),
+                width="stretch",
+                key="chart_survival",
             )
 
         with col2:

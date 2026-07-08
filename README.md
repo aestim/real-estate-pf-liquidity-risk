@@ -39,7 +39,7 @@ pip install -r requirements.txt
 
 ```bash
 # CLI version
-python pf_liquidity_risk/modeling/train.py
+python pf_liquidity_risk/modeling/engine.py
 
 # Interactive dashboard
 streamlit run pf_liquidity_risk/app.py
@@ -119,15 +119,16 @@ flowchart LR
 
 | Outcome | Probability | Timing | Root Cause & Description |
 | :--- | :---: | :---: | :--- |
-| **Refinancing Failure** | **92.8%** | Month 19 | **Critical Bottleneck:** Anchor NOI alone is insufficient to meet the LTV gate on the senior debt |
-| **Successful Exit** | **7.2%** | Month 36 | **Best Case:** Requires exceptional early lease-up of upper floors to offset debt |
+| **Refinancing Failure** | **98.0%** | Month 19-24 | **Critical Bottleneck:** Lease-up-dragged trailing NOI cannot meet the LTV gate on the senior debt; triggers a distressed sale (recovery > 0 in only ~13% of cases) |
+| **Successful Exit** | **2.0%** | Month 36 | **Best Case:** Requires exceptional revenue draws AND a lenient LTV gate |
 | **Default** | **0.0%** | Month 16-19 | **Downside Protected:** Anchor baseline revenue effectively neutralizes immediate insolvency |
 
 ### Risk Metrics
 
-- **Expected Shortfall:** ~1.0x initial equity (Average capital injection required upon refi failure)
-- **95% VaR:** 100.0% of initial equity (Full loss potential in refi failure scenarios)
-- **Median IRR (exits):** 50.0% annualized (High-risk, high-reward profile)
+- **Expected Shortfall:** ~1.2x initial equity (Average refinancing gap — the capital injection that would have been required to pass the gate)
+- **95% VaR:** 100.0% of initial equity (In most failed-refi paths the distressed sale recovers nothing: debt exceeds the discounted asset value)
+- **Expected Loss:** ~90% of initial equity across all scenarios
+- **Median IRR (exits):** 51.7% annualized (High-risk, high-reward profile)
 
 > *IRR here is the annualized return on equity (CAGR). With a single equity outflow at t0 and a single exit payout (no interim distributions), this equals the IRR of that cash-flow profile.*
 
@@ -190,10 +191,12 @@ flowchart LR
 | :--- | :---: | :---: | :---: | :--- |
 | Interest Rate | 10% | 14% | 18% | Pre-Refinancing (0-19m) |
 | Interest Rate | 5% | 7% | 9% | Post-Refinancing (19-36m) |
-| Monthly Revenue | 8.9 | 21.4 | 26.8 | Stabilization (indexed) |
-| Monthly Revenue | 21.4 | 35.7 | 44.6 | Post-Opening (indexed) |
+| Monthly Revenue | 0.89 | 2.14 | 2.68 | Stabilization (indexed, Equity = 100) |
+| Monthly Revenue | 2.14 | 3.57 | 4.46 | Post-Opening (indexed, Equity = 100) |
 | Construction Delay | 0mo | 2mo | 6mo | One-time shock |
 | Refinancing LTV | 70% | 80% | 85% | Month 19 gate |
+
+**Deterministic assumptions:** lease-up ramp 60% → 80% → 100% of stabilized revenue over the first 3 post-completion months (pre-signed anchor floor + linear lease-up of remaining floors); a failed refinancing gate triggers a distressed sale at a 10% haircut plus 1-2% transaction costs, with any residual returned to equity.
 
 ---
 
@@ -319,6 +322,8 @@ python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER
 4. **Single-asset analysis** - Portfolio diversification effects not considered
 5. **Fixed refinancing timing** - Month 19 not optimized dynamically
 6. **Deterministic demand-driver opening** - Month 24 assumed certain (not stochastic)
+7. **Refinancing failure triggers an immediate distressed sale** - Modeled as a forced disposal at a 10% haircut plus transaction costs, with any residual (after debt repayment) returned to equity. Loan extensions, restructuring, and fresh capital injections are NOT modeled — in reality sponsors often buy time
+8. **Simplified lease-up ramp** - Stabilization revenue ramps 60% → 80% → 100% over 3 months (anchor floor + linear lease-up of remaining floors). Actual rent-free structures and fit-out schedules vary by deal
 
 ### Data Requirements
 
@@ -343,7 +348,7 @@ python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER
 ├── pf_liquidity_risk/           # simulation engine + dashboard
 │   ├── modeling/
 │   │   ├── config_model.py      # PFConfig dataclass
-│   │   └── train.py             # Monte Carlo engine
+│   │   └── engine.py            # Monte Carlo engine
 │   ├── configs/
 │   │   └── public_config.py     # Normalized / illustrative params
 │   └── app.py                   # Streamlit dashboard
@@ -395,6 +400,7 @@ This section details the financial assumptions behind the **3-month "Death Valle
 * **The "Average Trap":** Lenders typically use a **simple 3-month trailing average**. 
 * **Valuation Impact:** Zero-revenue months (due to rent-free periods or fit-outs) at the start of the window can "drag down" the entire valuation, causing an **LTV breach** even if Month 19's performance is strong.
 * **💡 Risk Management:** This underscores why relying solely on historical NOI is fatal for highly leveraged PF projects.
+* *In the model: the lease-up ramp (60% → 80% → 100%) means the trailing 3-month average at the gate is only ~80% of stabilized NOI — this drag alone flips many otherwise-viable paths into refinancing failure (see Limitations #8).*
 </details>
 
 <details>

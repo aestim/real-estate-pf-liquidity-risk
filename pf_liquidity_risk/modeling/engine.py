@@ -32,8 +32,11 @@ class PFInvestmentModel:
     Simulates monthly cash flows, debt accrual, and solvency checks.
     """
 
-    def __init__(self, config: PFConfig):
+    def __init__(self, config: PFConfig, rng: np.random.Generator | None = None):
         self.cfg = config
+        # Injected Generator (np.random.default_rng) instead of the legacy
+        # global np.random state: isolated streams, parallel-safe.
+        self.rng = rng if rng is not None else np.random.default_rng()
 
     def simulate_path(self) -> Dict:
         equity = self.cfg.initial_equity
@@ -44,13 +47,13 @@ class PFInvestmentModel:
         refi_loan_amount = 0.0
 
         # Sample rates
-        pre_refi_rate = np.random.triangular(*self.cfg.pre_refi_rate)
-        post_refi_rate = np.random.triangular(*self.cfg.post_refi_rate)
+        pre_refi_rate = self.rng.triangular(*self.cfg.pre_refi_rate)
+        post_refi_rate = self.rng.triangular(*self.cfg.post_refi_rate)
 
-        sampled_stab_rev = np.random.triangular(*self.cfg.stabilization_revenue_dist)
-        sampled_post_rev = np.random.triangular(*self.cfg.post_court_revenue_dist)
+        sampled_stab_rev = self.rng.triangular(*self.cfg.stabilization_revenue_dist)
+        sampled_post_rev = self.rng.triangular(*self.cfg.post_opening_revenue_dist)
 
-        completion_month = self.cfg.completion_target_month + int(np.random.triangular(0, 2, 6))
+        completion_month = self.cfg.completion_target_month + int(self.rng.triangular(0, 2, 6))
         delay = max(0, completion_month - self.cfg.completion_target_month)
 
         refi_month = completion_month + 3
@@ -62,8 +65,17 @@ class PFInvestmentModel:
             # Phase determination
             if m < completion_month:
                 phase, revenue = "construction", 0
-            elif m < self.cfg.court_opening_month:
-                phase, revenue = "stabilization", sampled_stab_rev
+            elif m < self.cfg.demand_driver_opening_month:
+                # Lease-up ramp: anchor tenant floor from day 1, remaining
+                # floors ramp in linearly over stabilization_ramp_months
+                # (default 60% -> 80% -> 100%). Early sub-stabilized months
+                # drag down the trailing NOI at the refi gate ("Average Trap").
+                phase = "stabilization"
+                months_open = m - completion_month  # 0-based
+                n_ramp = max(1, self.cfg.stabilization_ramp_months - 1)
+                share = self.cfg.lease_up_initial_share
+                ramp = min(1.0, share + (1 - share) * months_open / n_ramp)
+                revenue = sampled_stab_rev * ramp
             else:
                 phase, revenue = "exit", sampled_post_rev
 
@@ -88,9 +100,11 @@ class PFInvestmentModel:
             else:
                 equity += net_cash_flow
 
-            # Construction delay impact
+            # Construction delay impact: one-time overhead shock on completion.
+            # delay_cost_factor (default 0.6) assumes ~60% of monthly fixed cost
+            # per delayed month is unrecoverable (idle crew, extended G&A).
             if m == completion_month and delay > 0:
-                equity -= delay * self.cfg.monthly_fixed_cost * 0.6
+                equity -= delay * self.cfg.monthly_fixed_cost * self.cfg.delay_cost_factor
 
             # Insolvency Check
             if equity <= 0:
@@ -98,22 +112,38 @@ class PFInvestmentModel:
 
             # Refinancing Viability Check (Month (Completion + 3))
             if m == refi_month:
-                ltv_limit = np.random.triangular(*self.cfg.target_refi_ltv_dist)
-                operating_history = [rev for rev in revenue_history[-3:] if rev > 0]
-                rolling_noi = np.mean(operating_history) if operating_history else revenue
+                ltv_limit = self.rng.triangular(*self.cfg.target_refi_ltv_dist)
+                # Simple trailing 3-month average NOI, as lenders typically use.
+                # Because of the lease-up ramp, the early low-revenue months
+                # drag this average down (the "Average Trap").
+                rolling_noi = np.mean(revenue_history[-3:])
                 implied_val = (rolling_noi * 12) / self.cfg.cap_rate
 
                 max_refi_loan = implied_val * ltv_limit
                 principal_at_refi = principal
                 refi_loan_amount = max_refi_loan
 
-                if principal > (implied_val * ltv_limit):
-                    # Refinancing failed
+                if principal > max_refi_loan:
+                    # Refinancing failed -> forced (distressed) sale of the
+                    # asset: haircut on implied value + transaction costs.
+                    # Sponsor recovers any residual after debt repayment.
+                    # (Loan extensions / fresh capital injections are NOT
+                    # modeled — see README Limitations.)
+                    sale_val = implied_val * (1 - self.cfg.distress_sale_discount)
+                    sale_cost = sale_val * self.rng.uniform(*self.cfg.exit_cost_range)
+                    recovery = max(0.0, sale_val - principal - sale_cost)
+
+                    if recovery > 0:
+                        years = m / 12
+                        irr = (recovery / self.cfg.initial_equity) ** (1 / years) - 1
+                    else:
+                        irr = -1.0
+
                     return {
                         "status": "refi_fail",
                         "month": m,
-                        "final_equity": 0,
-                        "irr": -1.0,
+                        "final_equity": recovery,
+                        "irr": irr,
                         "principal_at_refi": principal_at_refi,
                         "refi_loan_amount": refi_loan_amount,
                     }
@@ -124,7 +154,7 @@ class PFInvestmentModel:
             # Final Exit Transaction
             if m == self.cfg.exit_month:
                 final_val = (revenue * 12) / self.cfg.cap_rate
-                exit_cost = final_val * np.random.uniform(*self.cfg.exit_cost_range)
+                exit_cost = final_val * self.rng.uniform(*self.cfg.exit_cost_range)
                 exit_equity = final_val - principal - exit_cost
 
                 if exit_equity > 0:
@@ -166,12 +196,12 @@ class PFInvestmentModel:
 
 def run_simulation(iterations: int = 30000, seed: int = 42, config: PFConfig = None):
     """Executes the Monte Carlo simulation engine across specified iterations."""
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
 
     if config is None:
         config = config_module.get_config()
 
-    model = PFInvestmentModel(config)
+    model = PFInvestmentModel(config, rng)
     results = [model.simulate_path() for _ in range(iterations)]
     return pd.DataFrame(results), config
 
@@ -320,10 +350,11 @@ def print_summary_table(df: pd.DataFrame, config: PFConfig):
     print(f"  95% VaR (CaR)        : {car_95 / config.initial_equity:>8.2%} of equity")
     print(f"  99% VaR (CaR)        : {car_99 / config.initial_equity:>8.2%} of equity")
 
-    # Sharpe Ratio (for exit cases)
+    # Mean/Std of IRR, exit cases only. NOT a true Sharpe ratio: conditional
+    # on success (survivorship) and no risk-free rate subtracted.
     if len(exit_df) > 0 and exit_df["irr"].std() > 0:
-        sharpe = exit_df["irr"].mean() / exit_df["irr"].std()
-        print(f"  Sharpe Ratio         : {sharpe:>8.2f}")
+        ratio = exit_df["irr"].mean() / exit_df["irr"].std()
+        print(f"  IRR Mean/Std (exits) : {ratio:>8.2f}")
 
     print("\n" + "=" * 70)
 
