@@ -1,507 +1,132 @@
-# Liquidity Risk in Highly Leveraged Real Estate PF
+# Real Estate PF Liquidity Risk
 
-## Stochastic Cash Flow Modeling & Monte Carlo Risk Analysis
+[![CI](https://github.com/aestim/real-estate-pf-liquidity-risk/actions/workflows/ci.yml/badge.svg)](https://github.com/aestim/real-estate-pf-liquidity-risk/actions/workflows/ci.yml)
+[![Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://real-estate-pf-liquidity-risk.streamlit.app/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://real-estate-pf-liquidity-risk.streamlit.app/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+한국 임대형 부동산 PF가 **준공 후 대환에 성공하고 매각까지 버틸 수 있는지** 계산하는 교육용 프로젝트입니다.
 
-Monte Carlo simulation framework for quantifying liquidity risk in highly leveraged commercial real estate development projects. Analyzes default probability, refinancing viability, and equity IRR distributions through 30,000+ stochastic scenarios.
+```text
+토지 매입 → 브리지론 → 본PF → 공사·임대 → 대환 → 정상매각 또는 부실 처리
+```
 
-> **🚀 [Try the Live Demo](https://real-estate-pf-liquidity-risk.streamlit.app/)** - Interactive dashboard with real-time parameter adjustment
+월별 현금흐름을 하나의 원장으로 연결하고, 금리·공사비·점유율 등이 달라지는 상황을
+Monte Carlo 방식으로 반복 계산합니다.
 
----
+> 모든 금액과 스트레스 범위는 합성 가정입니다. 실제 거래, 시장 전망, 투자·대출 의사결정에 사용할 수 없습니다.
 
-## 🚀 Quick Start
+## 빠르게 사용하기
 
-### Option 1: Live Demo (Fastest)
+### 웹에서 보기
 
-**👉 [Launch Dashboard](https://real-estate-pf-liquidity-risk.streamlit.app/)**
+[라이브 데모 열기](https://real-estate-pf-liquidity-risk.streamlit.app/)
 
-Run simulations instantly in your browser with:
+현재 라이브 데모는 초기 V1 모델입니다. 국내 임대형 PF 거래구조를 반영한 V2는 아래 방법으로 실행합니다.
 
-- Real-time parameter adjustment
-- Interactive visualizations
-- Bilingual interface (EN/KO)
-- Scenario comparison
-- CSV export
+### 로컬에서 V2 실행
 
-### Option 2: Local Installation
+Python 3.10이 필요합니다.
 
 ```bash
 git clone https://github.com/aestim/real-estate-pf-liquidity-risk.git
-cd pf-liquidity-risk
+cd real-estate-pf-liquidity-risk
+
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
-```
 
-### Run Simulation
-
-```bash
-# CLI version
-python pf_liquidity_risk/modeling/engine.py
-
-# Interactive dashboard
-streamlit run pf_liquidity_risk/app.py
-```
-
----
-
-## Contract-Driven V2
-
-The live demo and the results below describe the legacy normalized V1 model.
-V2 is implemented beside it as a synthetic Korean income-producing PF case
-with a reconciled monthly transaction ledger:
-
-- bridge acquisition financing and main-PF conversion;
-- construction draws against facility commitments;
-- bottom-up lease-up, rent-free, collection loss, OPEX, and Property NOI;
-- take-out sizing at the minimum of LTV, Debt Yield, DSCR, and lender cap;
-- conditional sponsor cure, one loan extension, and distressed sale;
-- debt/preferred/common sale waterfall and monthly-timed equity IRR;
-- regime-correlated construction, leasing, rate, cap-rate, and LTV stress.
-
-```bash
-# Deterministic V2 summary and optional monthly ledger
-python -m pf_liquidity_risk.modeling.v2 base
-python -m pf_liquidity_risk.modeling.v2 base \
-  --ledger-output reports/v2_base_ledger.csv
-
-# Seeded scenario paths
-python -m pf_liquidity_risk.modeling.v2 simulate \
-  --iterations 1000 \
-  --seed 42 \
-  --output reports/v2_scenarios.csv
-
-# Standalone V2 dashboard
 streamlit run pf_liquidity_risk/v2_app.py
 ```
 
-See [`docs/v2-deal-contract.md`](docs/v2-deal-contract.md) for definitions,
-assumptions, and model boundaries, and
-[`docs/v2-architecture.md`](docs/v2-architecture.md) for the code and state
-flow. V2 amounts, regime weights, and scenario ranges are synthetic stress
-fixtures, not current Korean PF market estimates.
+Windows에서는 가상환경 활성화 명령만 `venv\Scripts\activate`를 사용하면 됩니다.
 
----
+대시보드는 세 단계로 사용합니다.
 
-## 📌 Executive Summary
+1. `기준 / 보수적 / 낙관적` 중 하나를 고릅니다.
+2. 대환 성공 여부와 필요한 대출금, 은행 대환한도를 확인합니다.
+3. 필요하면 돈 흐름이나 가상 미래 테스트를 봅니다.
 
-> **Note:** This is an **illustrative case study** built on normalized/synthetic parameters. It does not represent any specific real transaction; all figures are indexed (Initial Equity = 100) for demonstration.
+## 무엇을 계산하나
 
-| Item | Details |
-| :--- | :--- |
-| **Project** | Highly leveraged commercial development (representative structure) |
-| **Leverage** | **77.2% LTV** (3.39x Leverage) |
-| **Anchor** | **Blue-chip retail anchor** (ground-floor, long-term lease) |
-| **Core Risk** | **Refinancing Gap:** Critical liquidity burn between Month 16-19 |
+| 구간 | 계산 내용 |
+| --- | --- |
+| 개발 | 토지비, 공사비, 브리지론과 본PF 인출 |
+| 운영 | 임대료, 점유율, 운영비와 월별 NOI |
+| 대환 | LTV·Debt Yield·DSCR·은행 약정한도 중 가장 작은 대출한도 |
+| 위기 대응 | 시행사 추가출자, 1회 만기연장, 부실매각 |
+| 매각 | 대출 상환, 우선·보통 지분 배분, 시행사 IRR |
+| 스트레스 | 공사비·지연·임대·금리·매각 cap rate의 동반 변화 |
 
-> [!CAUTION]
-> **The 3-Month Death Valley:** PF interest at ~14% far exceeds early-stage NOI, leading to rapid equity erosion before the Month 19 refinancing gate.
-
----
-
-## 🎯 Core Problem: The 3-Month Refinancing Window
-
-### Project Timeline
-
-```mermaid
-flowchart LR
-    classDef default fill:#1f2937,stroke:#4b5563,stroke-width:2px,color:#fff
-    classDef danger fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fff
-    classDef gate fill:#1e3a8a,stroke:#60a5fa,stroke-width:2px,color:#fff
-    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#fff
-
-    Start((Start)) --> Const[Month 0-16<br/>Construction Phase<br/>Int: 10-18%]
-    Const --> Gap[Month 16-19<br/>Critical 3mo Gap<br/>Anchor + Early Leases]:::danger
-    Gap --> Refi{Month 19<br/>Refinancing Gate<br/>Valuation Check}:::gate
-    Refi --> Stab[Month 19-24<br/>Stabilization<br/>Int drops 5-9%]
-    Stab --> Ops[Month 24-36<br/>Full Ops & Demand Driver<br/>Max Valuation]:::success
-    Ops --> Exit((Exit))
-```
-
-### The Challenge
-
-| Phase | Timeline | Property NOI | Interest | Risk |
-| :--- | :--- | :--- | :--- | :--- |
-| **Construction** | 0-16m | Zero | 10-18% (100% capitalized) | Construction delays |
-| **Critical Window** | 16-19m | Starting | 10-18% (40% capitalized) | **Highest equity burn** |
-| **Refinancing Gate** | Month 19 | - | Rate reset | Refinancing failure risk |
-| **Stabilization** | 19-24m | Ramp-up | 5-9% (0% capitalized) | Market risk |
-| **Post-Opening** | 24-36m | Stabilized | 5-9% (0% capitalized) | Sustained operations |
-
-**Month 16-19 (Critical 3-Month Window):**
-
-- Building just completed - NOI is anchored by the blue-chip retail tenant and supplemented by initial early-moving tenants.
-- Still paying construction-phase rates (10-18% p.a.) on the large senior debt position.
-- **The structural flaw:** While the anchor tenant significantly accelerates overall lease-up, the combined initial NOI during this 3-month fit-out/rent-free period is still mathematically insufficient to cover the compounding debt service and hit the demanding LTV threshold, leading to equity erosion.
-
-**Month 19 (Refinancing Gate):**
-
-- Property value = (3-month trailing NOI × 12) / 5.5% cap rate
-- Bank requirement: Current Debt ≤ Property Value × LTV (70-85%)
-- **Success:** Interest drops to 5-9%, debt service manageable → survival likely
-- **Failure:** Cannot refinance, rates stay at 10-18% → default likely within 3-6 months
-
-**Month 24 (Demand Driver Opening):**
-
-- The primary external demand driver activates
-- NOI stabilizes at 80-100% capacity
-- No longer a critical gate (already refinanced at Month 19)
-
----
-
-## 📊 Key Results
-
-### Project Risk Summary (30,000 simulations)
-
-**Reference basis:** committed `public_config`, 30,000 iterations, seed 42,
-illustrative default rates (10-18% pre-refi, 5-9% post-refi), with no local
-private config or ECOS calibration override. Reproduce it with:
-
-```bash
-python -m pipeline.cli reference --iterations 30000 --seed 42
-```
-
-The full data pipeline intentionally uses ECOS-calibrated rates and therefore
-can produce different probabilities. Do not compare a calibrated pipeline run
-with this fixed public reference as if they used the same assumptions.
-
-| Outcome | Probability | Timing | Root Cause & Description |
-| :--- | :---: | :---: | :--- |
-| **Refinancing Failure** | **98.0%** | Month 19-24 | **Critical Bottleneck:** Lease-up-dragged trailing NOI cannot meet the LTV gate on the senior debt; triggers a distressed sale (recovery > 0 in only ~13% of cases) |
-| **Successful Exit** | **2.0%** | Month 36 | **Best Case:** Requires exceptional NOI draws AND a lenient LTV gate |
-| **Default** | **0.0%** | Month 16-19 | **Downside Protected:** Anchor baseline NOI effectively neutralizes immediate insolvency |
-
-### Risk Metrics
-
-- **Average failed-refi funding gap:** ~1.2x initial equity (the capital injection that would have been required to pass the gate; not statistical Expected Shortfall)
-- **95% VaR:** 100.0% of initial equity (In most failed-refi paths the distressed sale recovers nothing: debt exceeds the discounted asset value)
-- **Expected Loss:** ~90% of initial equity across all scenarios
-- **Median IRR (exits):** 51.7% annualized (High-risk, high-reward profile)
-
-> *IRR here is the annualized return on equity (CAGR). With a single equity outflow at t0 and a single exit payout (no interim distributions), this equals the IRR of that cash-flow profile.*
-
----
-
-## 🔧 Interactive Dashboard Features
-
-- **Real-time parameter adjustment**
-  - Capital structure (equity, debt, project overhead)
-  - Property NOI distributions (stabilization & post-opening phases)
-  - Interest rate scenarios (pre/post refinancing)
-  - Project timeline (completion, refinancing, demand-driver opening, exit)
-
-- **Dynamic visualizations**
-  - Outcome probability distribution
-  - IRR histogram with percentiles
-  - Month-by-month survival curve
-  - Exit multiple analysis
-
-- **Scenario comparison**
-  - Save baseline scenarios
-  - Compare deltas across runs
-  - Track changes in key metrics
-
-- **Bilingual interface** - English/Korean toggle
-
-- **Export capabilities** - Download CSV results, save high-resolution charts
-
----
-
-## 🛠️ Technical Stack
-
-### Architecture
-
-```mermaid
-flowchart LR
-    classDef engine fill:#1e293b,stroke:#64748b,stroke-width:2px,color:#f8fafc
-    classDef ui fill:#0f766e,stroke:#2dd4bf,stroke-width:2px,color:#f8fafc
-
-    A[PF Config] -->|Params| B(Monte Carlo Engine):::engine
-    B -->|30k Scenarios| C[(Pandas DataFrame)]:::engine
-    
-    subgraph Presentation Layer
-        C --> D[CLI Output]:::ui
-        C --> E[Streamlit App]:::ui
-        E --> F[Plotly Visuals]:::ui
-    end
-```
-
-### Core Components
-
-- **Simulation Engine:** `PFInvestmentModel` - Monthly cash flow paths with stochastic variables
-- **Configuration:** `PFConfig` - Dataclass with triangular distributions for all parameters
-- **Visualization:** Plotly interactive charts + Matplotlib static reports
-- **Caching:** Streamlit @cache_data for instant re-runs with same parameters
-
-### Stochastic Variables (Triangular Distributions)
-
-| Variable | Min | Mode | Max | Applied Phase |
-| :--- | :---: | :---: | :---: | :--- |
-| Interest Rate | 10% | 14% | 18% | Pre-Refinancing (0-19m) |
-| Interest Rate | 5% | 7% | 9% | Post-Refinancing (19-36m) |
-| Monthly Property NOI | 0.89 | 2.14 | 2.68 | Stabilization (indexed, Equity = 100) |
-| Monthly Property NOI | 2.14 | 3.57 | 4.46 | Post-Opening (indexed, Equity = 100) |
-| Construction Delay | 0mo | 2mo | 6mo | One-time shock |
-| Refinancing LTV | 70% | 80% | 85% | Month 19 gate |
-
-The NOI inputs are **after property operating expenses** and before project-level
-overhead and debt service. `monthly_fixed_cost` is retained as a legacy field
-name for compatibility, but represents project overhead below NOI; it is not
-subtracted again when capitalizing NOI into property value.
-
-**Deterministic assumptions:** lease-up ramp 60% → 80% → 100% of stabilized NOI over the first 3 post-completion months (pre-signed anchor floor + linear lease-up of remaining floors); a failed refinancing gate triggers a distressed sale at a 10% haircut plus 1-2% transaction costs, with any residual returned to equity.
-
----
-
-## 🧱 Data Pipeline (ETL → Warehouse → Marts)
-
-Beyond the simulation itself, the project ships a reproducible data pipeline that
-turns a **real interest-rate source** into model parameters and lands every
-simulation run in a **DuckDB analytical warehouse** with a star schema.
-
-```mermaid
-flowchart LR
-    classDef stage fill:#1e293b,stroke:#64748b,stroke-width:2px,color:#f8fafc
-    E[extract<br/>BOK ECOS CD-91d<br/>+ offline fallback]:::stage --> V[validate<br/>data-quality gate]:::stage
-    V --> C[calibrate<br/>history → triangular params]:::stage
-    C --> S[simulate<br/>Monte Carlo → Parquet]:::stage
-    S --> L[load<br/>DuckDB raw landing]:::stage
-    L --> T[transform<br/>dbt models + tests → CSV]:::stage
-```
-
-| Stage | Module | What it does |
-| :--- | :--- | :--- |
-| **Extract** | `pipeline/extract_rates.py` | Pulls the CD 91-day yield from the Bank of Korea **ECOS** API (the closest public proxy for Korean PF funding cost); falls back to a committed sample so runs are deterministic offline / in CI. |
-| **Validate** | `pipeline/validate.py` | **Data-quality gate**: fails fast on bad source data (out-of-range rates, nulls, duplicate/unsorted dates, too few rows) before it flows downstream. |
-| **Calibrate** | `pipeline/calibrate.py` | Derives triangular `(min, mode, max)` rate params from the history (p10 / median / p90) plus a documented PF spread — replacing hard-coded rates. |
-| **Simulate** | `pipeline/simulate.py` | Runs the Monte Carlo engine with calibrated params, tags each run with a `batch_id`, writes **Parquet**. |
-| **Load** | `pipeline/load.py` | Lands the Parquet into **DuckDB** as the raw table `raw_scenarios` (EL only — modeling is owned by dbt). |
-| **Transform** | `pipeline/transform.py` → **dbt** | Runs the dbt project (`dbt build`): models `raw → staging → dims/fact → marts` and runs data tests, then exports marts to CSV. |
-
-### Transform layer — dbt (`dbt/`)
-
-All modeling lives in a single **dbt (dbt-duckdb)** project. It models
-`raw_scenarios → staging → dims/fact → marts` with `{{ ref() }}` lineage and ships
-**13 data tests** (`not_null`, `unique`, `accepted_values`, `relationships`, and a
-singular range test). The `transform` stage invokes `dbt build`; you can also run
-it directly:
-
-```bash
-python -m pipeline.cli run --offline    # full pipeline (load + dbt build)
-cd dbt && dbt build --profiles-dir .     # or run dbt on its own
-```
-
-### Run it
-
-```bash
-# Full pipeline (uses live BOK ECOS data if ECOS_API_KEY is set, else sample)
-python -m pipeline.cli run
-
-# Fully offline & deterministic (used in CI)
-python -m pipeline.cli run --offline --iterations 10000
-
-# Ad-hoc SQL against the warehouse
-python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER BY pct DESC"
-```
-
-### Engineering practices
-
-- **Idempotent stages** — every load rebuilds tables with `CREATE OR REPLACE`; re-runs are safe.
-- **Data-quality gate** — source data is validated before it flows downstream (fail-fast).
-- **ELT with dbt** — load lands raw data; dbt owns modeling (staging → dims/fact → marts) with lineage + 13 data tests.
-- **Deterministic CI** — GitHub Actions runs ruff + pytest + offline pipeline + `dbt build` on every push.
-- **Containerized** — `Dockerfile` runs the whole pipeline with zero secrets.
-- **Separation of raw / processed** — Parquet landing layer, DuckDB warehouse, CSV marts.
-
----
-
-## 💼 Use Cases
-
-### For Developers
-
-- **Pre-Investment Due Diligence:** Quantify probability of surviving the 3-month window
-- **Capital Structure Optimization:** Test different debt/equity mixes
-- **Contingency Planning:** Size equity reserves for construction delays + refinancing gap
-
-### For Lenders
-
-- **Credit Risk Assessment:** Evaluate refinancing failure probability
-- **Covenant Structuring:** Set appropriate LTV thresholds for Month 19 gate
-- **Portfolio Risk Management:** Stress test exposure across multiple PF loans
-
-### For Investors
-
-- **Risk-Adjusted Return Analysis:** Compare IRR distributions across deals
-- **Liquidity Risk Quantification:** Understand 3-month window vulnerability
-- **Exit Strategy Planning:** Identify optimal hold periods given refinancing risk
-
----
-
-## 📈 Strategic Recommendations
-
-### Pre-Construction
-
-1. **Equity buffer:** Increase 30-40% above base case to absorb 3-month negative carry
-2. **Rate hedging:** Fix construction rate ≤12% to reduce downside exposure
-3. **Accelerated construction:** Reduce completion time 16→14 months to shorten high-rate period
-
-### Critical Window (Month 16-19) - HIGHEST PRIORITY
-
-1. **Leverage Anchor LOC:** Use a signed anchor-tenant Letter of Commitment (LOC) to negotiate "Forward-looking NOI" valuations with lenders, bypassing the standard requirement for 3 months of historical trailing NOI.
-2. **Aggressive lease-up:** Offer 2-3 months rent-free on upper floors to accelerate occupancy, strictly aligning with the anchor's grand opening traffic.
-3. **Operating reserves:** Pre-fund 3 months of debt service shortfall using the remaining equity buffer.
-
-### Refinancing (Month 19)
-
-1. **Forward-Valuation Push:** Refuse traditional trailing-average appraisals. Force lenders to value the asset based on "In-Place NOI" secured by the corporate anchor.
-2. **Conservative LTV target:** Aim for 70% (not 80-85%) to ensure approval even under stressed cap rate assumptions.
-3. **Alternative lenders:** Line up backup refinancing sources that specifically favor corporate-backed lease agreements.
-
-### Post-Refinancing (Month 19-36)
-
-1. **Debt paydown:** Use excess cash flow to reduce principal aggressively
-2. **Demand-driver coordination:** Monitor the external demand-driver construction timeline
-3. **Exit timing:** Optimize sale timing for maximum stabilized NOI multiple
-
----
-
-## ⚠️ Legacy V1 Limitations & Assumptions
-
-The limitations in this section apply to the published V1 demo. V2 addresses
-the monthly Sources & Uses, bottom-up NOI, multi-constraint refinancing,
-extension, and equity-cure mechanics, but still requires deal- and date-specific
-market calibration before decision use.
-
-### Model Assumptions
-
-1. **Interest rates independent across phases** - No correlation between pre/post refi rates
-2. **NOI distributions static** - Does not account for market cyclicality
-3. **No explicit macroeconomic scenarios** - Recession, rate shocks not modeled
-4. **Single-asset analysis** - Portfolio diversification effects not considered
-5. **Fixed refinancing timing** - Month 19 not optimized dynamically
-6. **Deterministic demand-driver opening** - Month 24 assumed certain (not stochastic)
-7. **Refinancing failure triggers an immediate distressed sale** - Modeled as a forced disposal at a 10% haircut plus transaction costs, with any residual (after debt repayment) returned to equity. Loan extensions, restructuring, and fresh capital injections are NOT modeled — in reality sponsors often buy time
-8. **Simplified lease-up ramp** - Stabilization NOI ramps 60% → 80% → 100% over 3 months (anchor floor + linear lease-up of remaining floors). Actual rent-free structures, property operating expenses, and fit-out schedules vary by deal
-
-### Data Requirements
-
-- Accurate construction timeline estimates
-- Reliable market rent/occupancy data for 3-month ramp-up
-- Lender refinancing appetite (LTV assumptions)
-- External demand-driver schedule certainty
-
-### Not Suitable For
-
-- ❌ Early-stage land banking projects
-- ❌ Multi-phase developments with complex waterfall structures
-- ❌ International projects with FX risk
-- ❌ Projects with significant regulatory uncertainty
-- ❌ Residential projects with different absorption patterns
-
----
-
-## 📁 Project Structure
+핵심 질문은 간단합니다.
 
 ```text
-├── pf_liquidity_risk/           # simulation engine + dashboard
-│   ├── modeling/
-│   │   ├── config_model.py      # PFConfig dataclass
-│   │   ├── engine.py            # legacy V1 Monte Carlo engine
-│   │   └── v2/                  # monthly PF contract + stress engine + CLI
-│   ├── configs/
-│   │   └── public_config.py     # Normalized / illustrative params
-│   ├── app.py                   # legacy V1 Streamlit dashboard
-│   └── v2_app.py                # contract-driven V2 dashboard
-├── pipeline/                    # data-engineering pipeline
-│   ├── extract_rates.py         # EXTRACT (BOK ECOS + offline fallback)
-│   ├── calibrate.py             # CALIBRATE (history → params)
-│   ├── validate.py              # VALIDATE (data-quality gate)
-│   ├── simulate.py              # SIMULATE (→ Parquet)
-│   ├── load.py                  # LOAD (Parquet → DuckDB raw_scenarios)
-│   ├── transform.py             # TRANSFORM (invokes dbt build → CSV export)
-│   └── cli.py                   # typer orchestration CLI
-├── dbt/                         # dbt (duckdb) transform layer + tests
-│   ├── models/{staging,marts}/  # staging → dims/fact → marts
-│   └── tests/                   # singular data tests
-├── tests/                       # pytest (engine + pipeline)
-├── docs/                        # V2 deal contract and architecture
-├── data/                        # raw / processed (gitignored)
-├── reports/                     # figures + mart CSV exports
-├── .github/workflows/ci.yml     # ruff + pytest + pipeline smoke test
-├── Dockerfile
-├── requirements.txt
-└── README.md
+은행 대환한도 ≥ 기존 대출 상환에 필요한 신규대출인가?
 ```
 
----
+## 명령줄 실행
 
-## ❓ FAQ & Strategic Insights
+```bash
+# 기준 시나리오
+python -m pf_liquidity_risk.modeling.v2 base
 
-This section details the financial assumptions behind the **3-month "Death Valley"** and the **Month 19 Refinancing Gate**.
+# 월별 원장 저장
+python -m pf_liquidity_risk.modeling.v2 base \
+  --ledger-output reports/v2_base_ledger.csv
 
-<details>
-<summary><b>Q: Why is there a 3-month gap between completion and refinancing?</b></summary>
+# 가상 시나리오 1,000개 생성
+python -m pf_liquidity_risk.modeling.v2 simulate \
+  --iterations 1000 --seed 42 \
+  --output reports/v2_scenarios.csv
+```
 
-* **Bank Underwriting:** Refinancing lenders (Facility Loans) require a **"Trailing NOI"** (Net Operating Income) to verify the asset's cash-flow stability before committing capital.
-* **Operational Runway:** It takes a minimum of 3 months to complete tenant fit-outs, clear rent-free periods, and document actual rent deposits in bank statements.
-* **💡 Strategic Insight:** This 3-month window is the project's most vulnerable phase, where high construction interest (10-18% p.a.) aggressively erodes equity before stabilization.
-</details>
+## 데이터 파이프라인
 
-<details>
-<summary><b>Q: Why can't we refinance at Month 16 (Day 1 of Completion)?</b></summary>
+V1 Monte Carlo 결과는 별도의 재현 가능한 분석 파이프라인으로 처리합니다.
 
-* **Vacancy Risk:** Without operating history, banks view the building as an "empty shell," significantly slashing the LTV (Loan-to-Value) ratio based on liquidation value rather than income value.
-* **The Anchor-Tenant "Cheat Code":** By securing a blue-chip retail anchor tenant, we can negotiate with lenders to recognize **"Forward-looking NOI"** based on signed lease agreements, potentially shortening this window.
-* **💡 Strategy:** The model tests whether this "Anchor-Tenant Strategy" provides enough leverage to bypass traditional 3-month trailing requirements.
-</details>
+```text
+금리 수집 → 품질검사 → 가정 보정 → 시뮬레이션 → DuckDB 적재 → dbt 마트
+```
 
-<details>
-<summary><b>Q: What if the 3-month NOI is weak but improving?</b></summary>
+```bash
+# 인터넷과 API 키 없이 전체 파이프라인 실행
+python -m pipeline.cli run --offline --iterations 1000
 
-* **The "Average Trap":** Lenders typically use a **simple 3-month trailing average**. 
-* **Valuation Impact:** Low-NOI months (due to vacancy, rent-free periods or fit-outs) at the start of the window can "drag down" the entire valuation, causing an **LTV breach** even if Month 19's performance is strong.
-* **💡 Risk Management:** This underscores why relying solely on historical NOI is fatal for highly leveraged PF projects.
-* *In the model: the lease-up ramp (60% → 80% → 100%) means the trailing 3-month average at the gate is only ~80% of stabilized NOI — this drag alone flips many otherwise-viable paths into refinancing failure (see Limitations #8).*
-</details>
+# 결과 조회
+python -m pipeline.cli query \
+  "SELECT status, pct FROM mart_outcome_summary ORDER BY pct DESC"
+```
 
-<details>
-<summary><b>Q: What happens if refinancing is delayed beyond Month 19?</b></summary>
+## 프로젝트 구조
 
-* **Maturity Extension:** While lenders may grant an extension to avoid immediate default (EOD), the cost is catastrophic.
-* **Financial Bleeding:** The project remains stuck with **10-18% p.a. construction rates**.
-* **💡 Warning:** This is a survival tactic, not a strategy. At this stage, a substantial monthly interest carry is "evaporated" into debt service, rapidly zeroing out the developer's equity.
-</details>
+```text
+pf_liquidity_risk/v2_app.py        초보자용 V2 대시보드
+pf_liquidity_risk/modeling/v2/     월별 PF 모델과 Monte Carlo
+pipeline/                           금리 수집·검증·적재 파이프라인
+dbt/                                DuckDB 변환 모델과 데이터 테스트
+tests/                              모델·파이프라인·대시보드 테스트
+docs/                               V2 거래 가정과 코드 구조
+```
 
-<details>
-<summary><b>Q: How does the external demand driver (Month 24) affect the Month 19 gate?</b></summary>
+## 검증
 
-* **Timing Mismatch:** The primary external demand driver for high-rent upper-floor tenants opens **5 months AFTER** the critical refinancing window.
-* **Lenders' Bet:** Refinancing banks at Month 19 are essentially "betting" on its timely completion.
-* **💡 Critical Path:** If that construction is delayed, the probability of refinancing failure spikes, as upper-floor stabilization becomes speculative rather than certain.
-</details>
+```bash
+ruff format --check
+ruff check
+pytest -q
+python -m pipeline.cli run --offline --iterations 1000
+```
 
----
+GitHub Actions에서도 같은 검사를 실행합니다.
 
-## 🗺️ Roadmap / Future Work
+## 더 자세히 보기
 
-Planned extensions (in rough priority order):
+- [V2 거래 가정과 계산 규칙](docs/v2-deal-contract.md)
+- [V2 코드와 데이터 흐름](docs/v2-architecture.md)
+- [프로젝트 학습 체크리스트](STUDY_PLAN.md)
 
-- Correlation structure between interest rates and NOI
-- Incremental loads for the dbt marts (vs. full refresh)
-- Airflow DAG for scheduling
-- Sensitivity analysis visualizations (tornado diagrams)
-- Mezzanine debt waterfall logic
+V1은 초기 아이디어와 데이터 파이프라인을 보존하기 위해 남겨두었습니다.
+새로운 기능과 대시보드는 V2를 기준으로 봐주세요.
 
----
+## License
 
-## 📄 License & Author
-
-MIT License — see [LICENSE](LICENSE). Built by **Minsung Kim**.
-
----
-
-**Built with:** Python • NumPy • Pandas • Streamlit • Plotly
-
-**Methodology:** Monte Carlo Simulation • Stochastic Modeling • Project Finance Risk Management
+[MIT License](LICENSE) · Minsung Kim
