@@ -3,9 +3,9 @@ requires = ["flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
 [project]
-name = "pf_liquidity_risk"
+name = "pf-risk-simulator"
 version = "0.0.1"
-description = "Monte Carlo liquidity-risk framework for highly leveraged real estate project finance: models refinancing-failure probability and equity IRR under stochastic rates, revenue, and construction delay (illustrative case)."
+description = "Monthly cash-flow and refinancing stress simulator for Korean real estate project finance."
 authors = [
   { name = "Minsung Kim" },
 ]
@@ -16,6 +16,9 @@ classifiers = [
     "License :: OSI Approved :: MIT License"
 ]
 requires-python = "~=3.10.0"
+
+[tool.flit.module]
+name = "pf_liquidity_risk"
 
 
 [tool.ruff]

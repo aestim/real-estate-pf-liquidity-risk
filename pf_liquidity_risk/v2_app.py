@@ -21,7 +21,7 @@ from pf_liquidity_risk.modeling.v2.project import (
 )
 
 st.set_page_config(
-    page_title="PF 사업 안전성 계산기",
+    page_title="PF Risk Simulator",
     page_icon="🏢",
     layout="centered",
     initial_sidebar_state="collapsed",

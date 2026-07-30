@@ -1,4 +1,4 @@
-# PF Liquidity Risk V2 Architecture
+# PF Risk Simulator: V2 Architecture
 
 V2 is a contract-driven, monthly cash-flow model for one synthetic Korean
 income-producing development. It is implemented beside the legacy V1 engine so
@@ -75,7 +75,7 @@ CLI exports.
 ## Running V2
 
 ```bash
-cd /Users/min/real-estate-pf-liquidity-risk
+cd pf-risk-simulator
 source venv/bin/activate
 
 # Deterministic summary

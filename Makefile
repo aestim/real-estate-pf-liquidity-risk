@@ -2,7 +2,7 @@
 # GLOBALS                                                                       #
 #################################################################################
 
-PROJECT_NAME = real-estate-pf-liquidity-risk
+PROJECT_NAME = pf-risk-simulator
 PYTHON_VERSION = 3.10
 PYTHON_INTERPRETER = python
 

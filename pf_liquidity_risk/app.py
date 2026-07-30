@@ -1,5 +1,5 @@
 """
-Interactive PF Liquidity Risk Dashboard
+Interactive PF Risk Simulator dashboard
 
 Run with: streamlit run pf_liquidity_risk/app.py
 """
@@ -24,7 +24,7 @@ from pf_liquidity_risk.reporting import equity_loss_metrics
 
 TRANSLATIONS = {
     "en": {
-        "title": "📊 PF Liquidity Risk Analyzer",
+        "title": "📊 PF Risk Simulator",
         "subtitle": "Interactive Monte Carlo Simulation Dashboard",
         "simulation_params": "⚙️ Simulation Parameters",
         "simulation_settings": "Simulation Settings",
@@ -147,7 +147,7 @@ TRANSLATIONS = {
         "no_refi_reached": "No scenarios reached the refinancing month.",
     },
     "ko": {
-        "title": "📊 PF 유동성 리스크 분석기",
+        "title": "📊 PF 리스크 시뮬레이터",
         "subtitle": "인터랙티브 몬테카를로 시뮬레이션 대시보드",
         "simulation_params": "⚙️ 시뮬레이션 파라미터",
         "simulation_settings": "시뮬레이션 설정",
@@ -312,7 +312,7 @@ def load_calibrated_rates():
 # ==========================================
 
 st.set_page_config(
-    page_title="PF Liquidity Risk Analyzer",
+    page_title="PF Risk Simulator",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
