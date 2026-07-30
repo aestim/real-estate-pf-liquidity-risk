@@ -38,10 +38,14 @@ class PFInvestmentModel:
         # global np.random state: isolated streams, parallel-safe.
         self.rng = rng if rng is not None else np.random.default_rng()
 
+    def income_approach_value(self, monthly_noi: float) -> float:
+        """Cap annualized NOI; a non-positive NOI cannot imply a negative value."""
+        return max(0.0, monthly_noi * 12 / self.cfg.cap_rate)
+
     def simulate_path(self) -> Dict:
         equity = self.cfg.initial_equity
         principal = self.cfg.senior_loan
-        revenue_history: List[float] = []
+        noi_history: List[float] = []
 
         principal_at_refi = 0.0
         refi_loan_amount = 0.0
@@ -50,8 +54,8 @@ class PFInvestmentModel:
         pre_refi_rate = self.rng.triangular(*self.cfg.pre_refi_rate)
         post_refi_rate = self.rng.triangular(*self.cfg.post_refi_rate)
 
-        sampled_stab_rev = self.rng.triangular(*self.cfg.stabilization_revenue_dist)
-        sampled_post_rev = self.rng.triangular(*self.cfg.post_opening_revenue_dist)
+        sampled_stab_noi = self.rng.triangular(*self.cfg.stabilization_noi_dist)
+        sampled_post_noi = self.rng.triangular(*self.cfg.post_opening_noi_dist)
 
         completion_month = self.cfg.completion_target_month + int(self.rng.triangular(0, 2, 6))
         delay = max(0, completion_month - self.cfg.completion_target_month)
@@ -64,7 +68,7 @@ class PFInvestmentModel:
         for m in range(1, self.cfg.exit_month + 1):
             # Phase determination
             if m < completion_month:
-                phase, revenue = "construction", 0
+                phase, monthly_noi = "construction", 0
             elif m < self.cfg.demand_driver_opening_month:
                 # Lease-up ramp: anchor tenant floor from day 1, remaining
                 # floors ramp in linearly over stabilization_ramp_months
@@ -75,11 +79,11 @@ class PFInvestmentModel:
                 n_ramp = max(1, self.cfg.stabilization_ramp_months - 1)
                 share = self.cfg.lease_up_initial_share
                 ramp = min(1.0, share + (1 - share) * months_open / n_ramp)
-                revenue = sampled_stab_rev * ramp
+                monthly_noi = sampled_stab_noi * ramp
             else:
-                phase, revenue = "exit", sampled_post_rev
+                phase, monthly_noi = "exit", sampled_post_noi
 
-            revenue_history.append(revenue)
+            noi_history.append(monthly_noi)
 
             # Interest rate logic
             monthly_rate = current_rate / 12
@@ -89,8 +93,10 @@ class PFInvestmentModel:
             paid_interest = interest * (1 - cap_ratio)
             principal += interest * cap_ratio
 
-            # Operating Cash Flow & Principal Sweep
-            net_cash_flow = revenue - (self.cfg.monthly_fixed_cost + paid_interest)
+            # Sponsor-level cash flow and principal sweep. Property operating
+            # expenses are already reflected in NOI; project overhead and
+            # interest sit below NOI.
+            net_cash_flow = monthly_noi - (self.cfg.monthly_fixed_cost + paid_interest)
 
             if net_cash_flow > 0:
                 principal -= net_cash_flow
@@ -114,10 +120,10 @@ class PFInvestmentModel:
             if m == refi_month:
                 ltv_limit = self.rng.triangular(*self.cfg.target_refi_ltv_dist)
                 # Simple trailing 3-month average NOI, as lenders typically use.
-                # Because of the lease-up ramp, the early low-revenue months
+                # Because of the lease-up ramp, the early low-NOI months
                 # drag this average down (the "Average Trap").
-                rolling_noi = np.mean(revenue_history[-3:])
-                implied_val = (rolling_noi * 12) / self.cfg.cap_rate
+                rolling_noi = np.mean(noi_history[-3:])
+                implied_val = self.income_approach_value(rolling_noi)
 
                 max_refi_loan = implied_val * ltv_limit
                 principal_at_refi = principal
@@ -153,7 +159,7 @@ class PFInvestmentModel:
 
             # Final Exit Transaction
             if m == self.cfg.exit_month:
-                final_val = (revenue * 12) / self.cfg.cap_rate
+                final_val = self.income_approach_value(monthly_noi)
                 exit_cost = final_val * self.rng.uniform(*self.cfg.exit_cost_range)
                 exit_equity = final_val - principal - exit_cost
 
@@ -349,6 +355,19 @@ def print_summary_table(df: pd.DataFrame, config: PFConfig):
     print(f"  Expected Loss        : {expected_loss / config.initial_equity:>8.2%} of equity")
     print(f"  95% VaR (CaR)        : {car_95 / config.initial_equity:>8.2%} of equity")
     print(f"  99% VaR (CaR)        : {car_99 / config.initial_equity:>8.2%} of equity")
+
+    reached_refi = df[df["principal_at_refi"] > 0].copy()
+    if not reached_refi.empty:
+        reached_refi["funding_gap"] = (
+            reached_refi["principal_at_refi"] - reached_refi["refi_loan_amount"]
+        )
+        failed_refi = reached_refi[reached_refi["funding_gap"] > 0]
+        if not failed_refi.empty:
+            avg_gap = failed_refi["funding_gap"].mean()
+            recoveries = df[df["status"] == "refi_fail"]["final_equity"]
+            positive_recovery = (recoveries > 0).mean() if not recoveries.empty else 0.0
+            print(f"  Avg Failed-Refi Gap   : {avg_gap / config.initial_equity:>8.2f}x equity")
+            print(f"  Positive Recovery    : {positive_recovery:>8.2%} of refi failures")
 
     # Mean/Std of IRR, exit cases only. NOT a true Sharpe ratio: conditional
     # on success (survivorship) and no risk-free rate subtracted.

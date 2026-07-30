@@ -53,6 +53,18 @@ def test_calibrate_produces_ordered_triangles():
         assert lo > 0
 
 
+def test_public_reference_ignores_pipeline_calibration():
+    # A calibration artifact may exist from an earlier test/run. The documented
+    # reference must still use the committed public assumptions.
+    calibrate_stage.calibrate(extract_rates.extract(offline=True))
+
+    df, cfg = simulate_stage.public_reference(iterations=100, seed=7)
+
+    assert len(df) == 100
+    assert cfg.pre_refi_rate == (0.10, 0.14, 0.18)
+    assert cfg.post_refi_rate == (0.05, 0.07, 0.09)
+
+
 def test_full_pipeline_offline_builds_warehouse():
     extract_rates.extract(offline=True)
     calibrate_stage.calibrate()

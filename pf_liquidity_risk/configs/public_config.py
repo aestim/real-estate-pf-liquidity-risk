@@ -14,9 +14,9 @@ def get_config() -> PFConfig:
         # Capital Structure (Indexed: Equity = 100)
         initial_equity=100.0,
         senior_loan=339.3,
-        # Operating Costs (Indexed as % of equity)
+        # Monthly project overhead below property NOI (Indexed)
         monthly_fixed_cost=1.79,
-        # Monthly Revenue Distributions (Indexed)
+        # Monthly property NOI distributions after property operating expenses
         stabilization_revenue_dist=(0.89, 2.14, 2.68),
         post_opening_revenue_dist=(2.14, 3.57, 4.46),
         config_type="PUBLIC (Normalized)",

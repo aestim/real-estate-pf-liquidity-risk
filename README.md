@@ -47,6 +47,44 @@ streamlit run pf_liquidity_risk/app.py
 
 ---
 
+## Contract-Driven V2
+
+The live demo and the results below describe the legacy normalized V1 model.
+V2 is implemented beside it as a synthetic Korean income-producing PF case
+with a reconciled monthly transaction ledger:
+
+- bridge acquisition financing and main-PF conversion;
+- construction draws against facility commitments;
+- bottom-up lease-up, rent-free, collection loss, OPEX, and Property NOI;
+- take-out sizing at the minimum of LTV, Debt Yield, DSCR, and lender cap;
+- conditional sponsor cure, one loan extension, and distressed sale;
+- debt/preferred/common sale waterfall and monthly-timed equity IRR;
+- regime-correlated construction, leasing, rate, cap-rate, and LTV stress.
+
+```bash
+# Deterministic V2 summary and optional monthly ledger
+python -m pf_liquidity_risk.modeling.v2 base
+python -m pf_liquidity_risk.modeling.v2 base \
+  --ledger-output reports/v2_base_ledger.csv
+
+# Seeded scenario paths
+python -m pf_liquidity_risk.modeling.v2 simulate \
+  --iterations 1000 \
+  --seed 42 \
+  --output reports/v2_scenarios.csv
+
+# Standalone V2 dashboard
+streamlit run pf_liquidity_risk/v2_app.py
+```
+
+See [`docs/v2-deal-contract.md`](docs/v2-deal-contract.md) for definitions,
+assumptions, and model boundaries, and
+[`docs/v2-architecture.md`](docs/v2-architecture.md) for the code and state
+flow. V2 amounts, regime weights, and scenario ranges are synthetic stress
+fixtures, not current Korean PF market estimates.
+
+---
+
 ## 📌 Executive Summary
 
 > **Note:** This is an **illustrative case study** built on normalized/synthetic parameters. It does not represent any specific real transaction; all figures are indexed (Initial Equity = 100) for demonstration.
@@ -84,7 +122,7 @@ flowchart LR
 
 ### The Challenge
 
-| Phase | Timeline | Revenue | Interest | Risk |
+| Phase | Timeline | Property NOI | Interest | Risk |
 | :--- | :--- | :--- | :--- | :--- |
 | **Construction** | 0-16m | Zero | 10-18% (100% capitalized) | Construction delays |
 | **Critical Window** | 16-19m | Starting | 10-18% (40% capitalized) | **Highest equity burn** |
@@ -94,7 +132,7 @@ flowchart LR
 
 **Month 16-19 (Critical 3-Month Window):**
 
-- Building just completed - Revenue is anchored by the blue-chip retail tenant and supplemented by initial early-moving tenants.
+- Building just completed - NOI is anchored by the blue-chip retail tenant and supplemented by initial early-moving tenants.
 - Still paying construction-phase rates (10-18% p.a.) on the large senior debt position.
 - **The structural flaw:** While the anchor tenant significantly accelerates overall lease-up, the combined initial NOI during this 3-month fit-out/rent-free period is still mathematically insufficient to cover the compounding debt service and hit the demanding LTV threshold, leading to equity erosion.
 
@@ -108,7 +146,7 @@ flowchart LR
 **Month 24 (Demand Driver Opening):**
 
 - The primary external demand driver activates
-- Revenue stabilizes at 80-100% capacity
+- NOI stabilizes at 80-100% capacity
 - No longer a critical gate (already refinanced at Month 19)
 
 ---
@@ -117,15 +155,27 @@ flowchart LR
 
 ### Project Risk Summary (30,000 simulations)
 
+**Reference basis:** committed `public_config`, 30,000 iterations, seed 42,
+illustrative default rates (10-18% pre-refi, 5-9% post-refi), with no local
+private config or ECOS calibration override. Reproduce it with:
+
+```bash
+python -m pipeline.cli reference --iterations 30000 --seed 42
+```
+
+The full data pipeline intentionally uses ECOS-calibrated rates and therefore
+can produce different probabilities. Do not compare a calibrated pipeline run
+with this fixed public reference as if they used the same assumptions.
+
 | Outcome | Probability | Timing | Root Cause & Description |
 | :--- | :---: | :---: | :--- |
 | **Refinancing Failure** | **98.0%** | Month 19-24 | **Critical Bottleneck:** Lease-up-dragged trailing NOI cannot meet the LTV gate on the senior debt; triggers a distressed sale (recovery > 0 in only ~13% of cases) |
-| **Successful Exit** | **2.0%** | Month 36 | **Best Case:** Requires exceptional revenue draws AND a lenient LTV gate |
-| **Default** | **0.0%** | Month 16-19 | **Downside Protected:** Anchor baseline revenue effectively neutralizes immediate insolvency |
+| **Successful Exit** | **2.0%** | Month 36 | **Best Case:** Requires exceptional NOI draws AND a lenient LTV gate |
+| **Default** | **0.0%** | Month 16-19 | **Downside Protected:** Anchor baseline NOI effectively neutralizes immediate insolvency |
 
 ### Risk Metrics
 
-- **Expected Shortfall:** ~1.2x initial equity (Average refinancing gap — the capital injection that would have been required to pass the gate)
+- **Average failed-refi funding gap:** ~1.2x initial equity (the capital injection that would have been required to pass the gate; not statistical Expected Shortfall)
 - **95% VaR:** 100.0% of initial equity (In most failed-refi paths the distressed sale recovers nothing: debt exceeds the discounted asset value)
 - **Expected Loss:** ~90% of initial equity across all scenarios
 - **Median IRR (exits):** 51.7% annualized (High-risk, high-reward profile)
@@ -137,8 +187,8 @@ flowchart LR
 ## 🔧 Interactive Dashboard Features
 
 - **Real-time parameter adjustment**
-  - Capital structure (equity, debt, fixed costs)
-  - Revenue distributions (stabilization & post-opening phases)
+  - Capital structure (equity, debt, project overhead)
+  - Property NOI distributions (stabilization & post-opening phases)
   - Interest rate scenarios (pre/post refinancing)
   - Project timeline (completion, refinancing, demand-driver opening, exit)
 
@@ -191,12 +241,17 @@ flowchart LR
 | :--- | :---: | :---: | :---: | :--- |
 | Interest Rate | 10% | 14% | 18% | Pre-Refinancing (0-19m) |
 | Interest Rate | 5% | 7% | 9% | Post-Refinancing (19-36m) |
-| Monthly Revenue | 0.89 | 2.14 | 2.68 | Stabilization (indexed, Equity = 100) |
-| Monthly Revenue | 2.14 | 3.57 | 4.46 | Post-Opening (indexed, Equity = 100) |
+| Monthly Property NOI | 0.89 | 2.14 | 2.68 | Stabilization (indexed, Equity = 100) |
+| Monthly Property NOI | 2.14 | 3.57 | 4.46 | Post-Opening (indexed, Equity = 100) |
 | Construction Delay | 0mo | 2mo | 6mo | One-time shock |
 | Refinancing LTV | 70% | 80% | 85% | Month 19 gate |
 
-**Deterministic assumptions:** lease-up ramp 60% → 80% → 100% of stabilized revenue over the first 3 post-completion months (pre-signed anchor floor + linear lease-up of remaining floors); a failed refinancing gate triggers a distressed sale at a 10% haircut plus 1-2% transaction costs, with any residual returned to equity.
+The NOI inputs are **after property operating expenses** and before project-level
+overhead and debt service. `monthly_fixed_cost` is retained as a legacy field
+name for compatibility, but represents project overhead below NOI; it is not
+subtracted again when capitalizing NOI into property value.
+
+**Deterministic assumptions:** lease-up ramp 60% → 80% → 100% of stabilized NOI over the first 3 post-completion months (pre-signed anchor floor + linear lease-up of remaining floors); a failed refinancing gate triggers a distressed sale at a 10% haircut plus 1-2% transaction costs, with any residual returned to equity.
 
 ---
 
@@ -312,18 +367,23 @@ python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER
 
 ---
 
-## ⚠️ Limitations & Assumptions
+## ⚠️ Legacy V1 Limitations & Assumptions
+
+The limitations in this section apply to the published V1 demo. V2 addresses
+the monthly Sources & Uses, bottom-up NOI, multi-constraint refinancing,
+extension, and equity-cure mechanics, but still requires deal- and date-specific
+market calibration before decision use.
 
 ### Model Assumptions
 
 1. **Interest rates independent across phases** - No correlation between pre/post refi rates
-2. **Revenue distributions static** - Does not account for market cyclicality
+2. **NOI distributions static** - Does not account for market cyclicality
 3. **No explicit macroeconomic scenarios** - Recession, rate shocks not modeled
 4. **Single-asset analysis** - Portfolio diversification effects not considered
 5. **Fixed refinancing timing** - Month 19 not optimized dynamically
 6. **Deterministic demand-driver opening** - Month 24 assumed certain (not stochastic)
 7. **Refinancing failure triggers an immediate distressed sale** - Modeled as a forced disposal at a 10% haircut plus transaction costs, with any residual (after debt repayment) returned to equity. Loan extensions, restructuring, and fresh capital injections are NOT modeled — in reality sponsors often buy time
-8. **Simplified lease-up ramp** - Stabilization revenue ramps 60% → 80% → 100% over 3 months (anchor floor + linear lease-up of remaining floors). Actual rent-free structures and fit-out schedules vary by deal
+8. **Simplified lease-up ramp** - Stabilization NOI ramps 60% → 80% → 100% over 3 months (anchor floor + linear lease-up of remaining floors). Actual rent-free structures, property operating expenses, and fit-out schedules vary by deal
 
 ### Data Requirements
 
@@ -348,10 +408,12 @@ python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER
 ├── pf_liquidity_risk/           # simulation engine + dashboard
 │   ├── modeling/
 │   │   ├── config_model.py      # PFConfig dataclass
-│   │   └── engine.py            # Monte Carlo engine
+│   │   ├── engine.py            # legacy V1 Monte Carlo engine
+│   │   └── v2/                  # monthly PF contract + stress engine + CLI
 │   ├── configs/
 │   │   └── public_config.py     # Normalized / illustrative params
-│   └── app.py                   # Streamlit dashboard
+│   ├── app.py                   # legacy V1 Streamlit dashboard
+│   └── v2_app.py                # contract-driven V2 dashboard
 ├── pipeline/                    # data-engineering pipeline
 │   ├── extract_rates.py         # EXTRACT (BOK ECOS + offline fallback)
 │   ├── calibrate.py             # CALIBRATE (history → params)
@@ -364,6 +426,7 @@ python -m pipeline.cli query "SELECT status, pct FROM mart_outcome_summary ORDER
 │   ├── models/{staging,marts}/  # staging → dims/fact → marts
 │   └── tests/                   # singular data tests
 ├── tests/                       # pytest (engine + pipeline)
+├── docs/                        # V2 deal contract and architecture
 ├── data/                        # raw / processed (gitignored)
 ├── reports/                     # figures + mart CSV exports
 ├── .github/workflows/ci.yml     # ruff + pytest + pipeline smoke test
@@ -398,7 +461,7 @@ This section details the financial assumptions behind the **3-month "Death Valle
 <summary><b>Q: What if the 3-month NOI is weak but improving?</b></summary>
 
 * **The "Average Trap":** Lenders typically use a **simple 3-month trailing average**. 
-* **Valuation Impact:** Zero-revenue months (due to rent-free periods or fit-outs) at the start of the window can "drag down" the entire valuation, causing an **LTV breach** even if Month 19's performance is strong.
+* **Valuation Impact:** Low-NOI months (due to vacancy, rent-free periods or fit-outs) at the start of the window can "drag down" the entire valuation, causing an **LTV breach** even if Month 19's performance is strong.
 * **💡 Risk Management:** This underscores why relying solely on historical NOI is fatal for highly leveraged PF projects.
 * *In the model: the lease-up ramp (60% → 80% → 100%) means the trailing 3-month average at the gate is only ~80% of stabilized NOI — this drag alone flips many otherwise-viable paths into refinancing failure (see Limitations #8).*
 </details>
@@ -425,7 +488,7 @@ This section details the financial assumptions behind the **3-month "Death Valle
 
 Planned extensions (in rough priority order):
 
-- Correlation structure between interest rates and revenue
+- Correlation structure between interest rates and NOI
 - Incremental loads for the dbt marts (vs. full refresh)
 - Airflow DAG for scheduling
 - Sensitivity analysis visualizations (tornado diagrams)

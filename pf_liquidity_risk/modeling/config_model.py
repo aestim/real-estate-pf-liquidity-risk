@@ -18,11 +18,14 @@ class PFConfig:
     initial_equity: float
     senior_loan: float
 
-    # Operating Costs (normalized units)
+    # Monthly project-level overhead below property NOI (normalized units).
+    # Kept as monthly_fixed_cost for backwards compatibility with local
+    # configuration files; it is not a property operating expense.
     monthly_fixed_cost: float
 
-    # Monthly Revenue Distributions (Min, Mode, Max)
-    # Modeled as triangular distributions to reflect occupancy and market rent uncertainty.
+    # Monthly property NOI distributions (Min, Mode, Max), after property
+    # operating expenses but before project overhead and debt service.
+    # The legacy field names are retained for backwards compatibility.
     stabilization_revenue_dist: Tuple[float, float, float]
     post_opening_revenue_dist: Tuple[float, float, float]
 
@@ -46,8 +49,8 @@ class PFConfig:
     # monthly fixed cost (unrecoverable overhead: idle crew, extended G&A).
     delay_cost_factor: float = 0.6
 
-    # Lease-up ramp after completion. The pre-signed anchor tenant provides a
-    # revenue floor from day 1 (lease_up_initial_share of stabilized revenue);
+    # Lease-up ramp after completion. The pre-signed anchor tenant provides an
+    # NOI floor from day 1 (lease_up_initial_share of stabilized NOI);
     # the remaining floors ramp in linearly over stabilization_ramp_months
     # (fit-outs, rent-free periods). Default: 60% -> 80% -> 100%.
     stabilization_ramp_months: int = 3
@@ -66,8 +69,27 @@ class PFConfig:
     capitalized_ratio_map: Dict[str, float] = field(default_factory=dict, init=False)
 
     def __post_init__(self):
+        if self.initial_equity <= 0:
+            raise ValueError("initial_equity must be positive")
+        if self.senior_loan < 0:
+            raise ValueError("senior_loan cannot be negative")
+        if self.monthly_fixed_cost < 0:
+            raise ValueError("monthly_fixed_cost cannot be negative")
+        if self.cap_rate <= 0:
+            raise ValueError("cap_rate must be positive")
+
         self.capitalized_ratio_map = {
             "construction": 1.0,  # Full interest capitalization during building
             "stabilization": 0.4,  # Partial capitalization during ramp-up
             "exit": 0.0,  # No capitalization post-opening
         }
+
+    @property
+    def stabilization_noi_dist(self) -> Tuple[float, float, float]:
+        """Domain-correct alias for the legacy stabilization field name."""
+        return self.stabilization_revenue_dist
+
+    @property
+    def post_opening_noi_dist(self) -> Tuple[float, float, float]:
+        """Domain-correct alias for the legacy post-opening field name."""
+        return self.post_opening_revenue_dist

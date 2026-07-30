@@ -15,6 +15,7 @@ import duckdb
 from loguru import logger
 import typer
 
+from pf_liquidity_risk.modeling.engine import print_summary_table
 from pipeline import calibrate as calibrate_stage
 from pipeline import config, extract_rates
 from pipeline import load as load_stage
@@ -61,6 +62,13 @@ def load():
 def transform():
     """TRANSFORM: run SQL marts, export CSVs to reports/."""
     transform_stage.transform()
+
+
+@app.command()
+def reference(iterations: int = 30000, seed: int = 42):
+    """Run the documented public reference case without calibrated/local overrides."""
+    df, cfg = simulate_stage.public_reference(iterations=iterations, seed=seed)
+    print_summary_table(df, cfg)
 
 
 @app.command()

@@ -19,8 +19,15 @@ from loguru import logger
 import pandas as pd
 
 from pf_liquidity_risk.configs import public_config
+from pf_liquidity_risk.modeling.config_model import PFConfig
 from pf_liquidity_risk.modeling.engine import run_simulation
 from pipeline import config
+
+
+def public_reference(iterations: int = 30000, seed: int = 42) -> tuple[pd.DataFrame, PFConfig]:
+    """Run the fixed public case, ignoring local and calibrated rate overrides."""
+    cfg = public_config.get_config()
+    return run_simulation(iterations=iterations, seed=seed, config=cfg)
 
 
 def simulate(iterations: int = 30000, seed: int = 42) -> pd.DataFrame:

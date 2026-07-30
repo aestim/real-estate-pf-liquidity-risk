@@ -36,6 +36,40 @@ def test_config_is_well_formed(cfg):
         assert lo <= mode <= hi
 
 
+def test_config_rejects_non_positive_cap_rate(cfg):
+    values = {
+        name: getattr(cfg, name)
+        for name in (
+            "initial_equity",
+            "senior_loan",
+            "monthly_fixed_cost",
+            "stabilization_revenue_dist",
+            "post_opening_revenue_dist",
+        )
+    }
+    with pytest.raises(ValueError, match="cap_rate"):
+        PFConfig(**values, cap_rate=0)
+
+
+def test_income_approach_value_capitalizes_monthly_noi(cfg):
+    cfg.cap_rate = 0.05
+    model = PFInvestmentModel(cfg, np.random.default_rng(0))
+
+    assert model.income_approach_value(monthly_noi=5.0) == pytest.approx(1200.0)
+
+
+def test_noi_aliases_preserve_legacy_config_compatibility(cfg):
+    assert cfg.stabilization_noi_dist == cfg.stabilization_revenue_dist
+    assert cfg.post_opening_noi_dist == cfg.post_opening_revenue_dist
+
+
+def test_income_approach_value_is_zero_for_non_positive_noi(cfg):
+    model = PFInvestmentModel(cfg, np.random.default_rng(0))
+
+    assert model.income_approach_value(0.0) == 0.0
+    assert model.income_approach_value(-1.0) == 0.0
+
+
 def test_single_path_returns_valid_status(cfg):
     result = PFInvestmentModel(cfg, np.random.default_rng(0)).simulate_path()
     assert result["status"] in VALID_STATUSES

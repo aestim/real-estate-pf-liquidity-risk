@@ -16,6 +16,7 @@ import streamlit as st
 # Import your simulation components
 from pf_liquidity_risk.modeling.config_model import PFConfig
 from pf_liquidity_risk.modeling.engine import PFInvestmentModel
+from pf_liquidity_risk.reporting import equity_loss_metrics
 
 # ==========================================
 # Translations
@@ -35,12 +36,12 @@ TRANSLATIONS = {
         "use_normalized": "Use Normalized Values (Index)",
         "initial_equity": "Initial Equity",
         "senior_loan": "Senior Loan",
-        "monthly_fixed_cost": "Monthly Fixed Cost",
+        "monthly_fixed_cost": "Monthly Project Overhead",
         "ltv": "LTV",
         "leverage": "Leverage",
-        "revenue_assumptions": "📈 Revenue Assumptions",
-        "stabilization_phase": "Stabilization Phase Revenue",
-        "post_opening": "Post-Opening Revenue",
+        "revenue_assumptions": "📈 NOI Assumptions",
+        "stabilization_phase": "Stabilization Phase NOI",
+        "post_opening": "Post-Opening NOI",
         "min": "Min",
         "mode": "Mode",
         "max": "Max",
@@ -105,7 +106,7 @@ TRANSLATIONS = {
         "instructions_title": "How to Use This Dashboard",
         "instructions": """
         1. **Adjust Capital Structure**: Set equity and debt amounts (normalized or absolute)
-        2. **Configure Revenue**: Set expected revenue ranges for each phase
+        2. **Configure NOI**: Set expected property NOI ranges for each phase
         3. **Set Interest Rates**: Define interest rate distributions by project phase
         4. **Run Simulation**: Click the button to execute Monte Carlo analysis
         5. **Analyze Results**: Review charts, metrics, and detailed statistics
@@ -140,7 +141,7 @@ TRANSLATIONS = {
         "total_duration": "Total Project Duration",
         "refi_analysis": "💸 Refinancing Analysis",
         "refi_failure_rate": "Refi Failure Rate",
-        "expected_shortfall": "Expected Shortfall (Avg. Gap)",
+        "expected_shortfall": "Average Funding Gap (Failed Refi)",
         "capital_injection": "Capital Injection Required",
         "no_shortfall": "✅ No Shortfall - All scenarios passed refinancing.",
         "no_refi_reached": "No scenarios reached the refinancing month.",
@@ -158,12 +159,12 @@ TRANSLATIONS = {
         "use_normalized": "정규화된 값 사용 (인덱스)",
         "initial_equity": "초기 자기자본",
         "senior_loan": "선순위 대출",
-        "monthly_fixed_cost": "월 고정비",
+        "monthly_fixed_cost": "월 프로젝트 고정 오버헤드",
         "ltv": "LTV",
         "leverage": "레버리지",
-        "revenue_assumptions": "📈 매출 가정",
-        "stabilization_phase": "안정화 단계 매출",
-        "post_opening": "오픈 후 매출",
+        "revenue_assumptions": "📈 NOI 가정",
+        "stabilization_phase": "안정화 단계 NOI",
+        "post_opening": "오픈 후 NOI",
         "min": "최소",
         "mode": "최빈",
         "max": "최대",
@@ -228,7 +229,7 @@ TRANSLATIONS = {
         "instructions_title": "사용 방법",
         "instructions": """
         1. **자본 구조 조정**: 자기자본과 부채 금액 설정 (정규화 또는 절대값)
-        2. **매출 설정**: 각 단계별 예상 매출 범위 설정
+        2. **NOI 설정**: 각 단계별 예상 부동산 NOI 범위 설정
         3. **금리 설정**: 프로젝트 단계별 금리 분포 정의
         4. **시뮬레이션 실행**: 버튼 클릭하여 몬테카를로 분석 수행
         5. **결과 분석**: 차트, 지표, 상세 통계 검토
@@ -263,7 +264,7 @@ TRANSLATIONS = {
         "total_duration": "총 프로젝트 기간",
         "refi_analysis": "💸 전환대출(Refinancing) 심사 분석",
         "refi_failure_rate": "리파이낸싱 실패 확률",
-        "expected_shortfall": "실패 시 평균 부족 자금 (Expected Shortfall)",
+        "expected_shortfall": "리파이 실패 시 평균 부족 자금",
         "capital_injection": "자본 보충 필요",
         "no_shortfall": "✅ 안전 - 모든 시나리오에서 대출 한도가 충분합니다.",
         "no_refi_reached": "리파이낸싱 심사 시점 도달 전 모든 시나리오가 부도 처리되었습니다.",
@@ -694,7 +695,7 @@ def main():
 
         st.markdown("---")
 
-        # Revenue Parameters
+        # Property NOI parameters
         st.subheader(t("revenue_assumptions", lang))
 
         with st.expander(t("stabilization_phase", lang)):
@@ -915,7 +916,11 @@ def main():
             df = run_simulation_cached(config_dict, iterations, seed)
             st.session_state["df"] = df
             st.session_state["has_run"] = True
-            st.session_state["exit_month"] = exit_month
+            st.session_state["result_context"] = {
+                "initial_equity": initial_equity,
+                "use_normalized": use_normalized,
+                "exit_month": exit_month,
+            }
 
             elapsed_time = time.time() - start_time
             st.success(t("completed", lang).format(elapsed_time))
@@ -923,6 +928,17 @@ def main():
     # 2. Display Results (keeps UI alive across button clicks)
     if st.session_state.get("has_run", False) and st.session_state.get("df") is not None:
         df = st.session_state["df"]
+        result_context = st.session_state.get(
+            "result_context",
+            {
+                "initial_equity": initial_equity,
+                "use_normalized": use_normalized,
+                "exit_month": exit_month,
+            },
+        )
+        result_initial_equity = float(result_context["initial_equity"])
+        result_use_normalized = bool(result_context["use_normalized"])
+        result_exit_month = int(result_context["exit_month"])
 
         st.markdown("---")
 
@@ -941,8 +957,8 @@ def main():
         exit_df = df[df["status"] == "exit"]
         median_irr = exit_df["irr"].median() if not exit_df.empty else 0
 
-        loss = initial_equity - df["final_equity"]
-        var_95 = np.percentile(loss, 95) / initial_equity * 100
+        loss_metrics = equity_loss_metrics(df, result_initial_equity)
+        var_95 = loss_metrics["var_95_pct"]
 
         # Base case management buttons
         col_base1, col_base2, col_base3 = st.columns([2, 1, 1])
@@ -1034,7 +1050,7 @@ def main():
                 failure_rate = (len(failed_refi_cases) / len(refi_cases)) * 100
 
                 # Format currency based on user selection
-                if use_normalized:
+                if result_use_normalized:
                     val_es = f"{expected_shortfall:.1f} {t('index', lang)}"
                 else:
                     if lang == "en":
@@ -1073,7 +1089,7 @@ def main():
         with col1:
             st.plotly_chart(create_outcome_chart(df, lang), width="stretch", key="chart_outcome")
             st.plotly_chart(
-                create_survival_curve(df, lang, st.session_state.get("exit_month", 36)),
+                create_survival_curve(df, lang, result_exit_month),
                 width="stretch",
                 key="chart_survival",
             )
@@ -1166,16 +1182,16 @@ def main():
                 var_data = {
                     t("confidence_level", lang): ["90%", "95%", "99%"],
                     f"VaR (% {t('of_equity', lang)})": [
-                        f"{np.percentile(loss, 90) / initial_equity * 100:.1f}%",
-                        f"{np.percentile(loss, 95) / initial_equity * 100:.1f}%",
-                        f"{np.percentile(loss, 99) / initial_equity * 100:.1f}%",
+                        f"{loss_metrics['var_90_pct']:.1f}%",
+                        f"{loss_metrics['var_95_pct']:.1f}%",
+                        f"{loss_metrics['var_99_pct']:.1f}%",
                     ],
                 }
                 st.dataframe(pd.DataFrame(var_data), width="stretch", hide_index=True)
 
             with col2:
                 st.markdown(f"**{t('additional_risk', lang)}**")
-                expected_loss = loss.mean() / initial_equity * 100
+                expected_loss = loss_metrics["expected_loss_pct"]
 
                 if len(exit_df) > 0 and exit_df["irr"].std() > 0:
                     sharpe = exit_df["irr"].mean() / exit_df["irr"].std()
