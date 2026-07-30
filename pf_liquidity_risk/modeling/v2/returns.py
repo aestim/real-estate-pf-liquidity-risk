@@ -1,7 +1,7 @@
 """Equity return helpers with explicit monthly cash-flow timing."""
 
+from collections.abc import Sequence
 import math
-from typing import Sequence
 
 
 def periodic_irr(

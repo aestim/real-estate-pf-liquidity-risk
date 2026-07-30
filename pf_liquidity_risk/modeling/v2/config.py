@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 import math
-from typing import Tuple
 
 
 def _require_non_negative(values: dict[str, float]) -> None:
@@ -108,11 +107,11 @@ class DevelopmentTimeline:
             raise ValueError("timeline milestones must be strictly ordered")
 
     @property
-    def predevelopment_months(self) -> Tuple[int, ...]:
+    def predevelopment_months(self) -> tuple[int, ...]:
         return tuple(range(1, self.main_pf_close_month))
 
     @property
-    def construction_months(self) -> Tuple[int, ...]:
+    def construction_months(self) -> tuple[int, ...]:
         return tuple(range(self.construction_start_month, self.completion_month + 1))
 
 
@@ -143,7 +142,7 @@ class FinancingTerms:
         )
 
 
-def _default_hard_cost_weights() -> Tuple[float, ...]:
+def _default_hard_cost_weights() -> tuple[float, ...]:
     """An 18-month deterministic S-curve summing to one."""
     return (
         0.02,
@@ -176,7 +175,7 @@ class DevelopmentLedgerConfig:
     timeline: DevelopmentTimeline = field(default_factory=DevelopmentTimeline)
     financing: FinancingTerms = field(default_factory=FinancingTerms)
     predevelopment_soft_cost: float = 20.0
-    hard_cost_weights: Tuple[float, ...] = field(default_factory=_default_hard_cost_weights)
+    hard_cost_weights: tuple[float, ...] = field(default_factory=_default_hard_cost_weights)
     amount_tolerance: float = 1e-8
 
     def __post_init__(self) -> None:

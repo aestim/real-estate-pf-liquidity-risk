@@ -3,6 +3,8 @@ Tests for the data pipeline. All run fully offline (committed sample data),
 so they are deterministic and need no network or secrets in CI.
 """
 
+from itertools import pairwise
+
 import duckdb
 import pandas as pd
 import pytest
@@ -21,6 +23,32 @@ def test_extract_offline_returns_clean_frame():
     assert list(df.columns) == ["date", "rate_pct"]
     assert df["rate_pct"].notna().all()
     assert config.RATES_RAW_CSV.exists()
+
+
+def test_extract_falls_back_for_expected_live_source_error(monkeypatch):
+    monkeypatch.setattr(config, "ECOS_API_KEY", "test-key")
+
+    def raise_source_error(_api_key):
+        raise ValueError("malformed ECOS response")
+
+    monkeypatch.setattr(extract_rates, "_from_ecos", raise_source_error)
+
+    df = extract_rates.extract()
+
+    assert not df.empty
+    assert list(df.columns) == ["date", "rate_pct"]
+
+
+def test_extract_does_not_hide_programming_errors(monkeypatch):
+    monkeypatch.setattr(config, "ECOS_API_KEY", "test-key")
+
+    def raise_programming_error(_api_key):
+        raise AssertionError("unexpected implementation defect")
+
+    monkeypatch.setattr(extract_rates, "_from_ecos", raise_programming_error)
+
+    with pytest.raises(AssertionError, match="implementation defect"):
+        extract_rates.extract()
 
 
 def test_validate_passes_on_sample():
@@ -92,6 +120,6 @@ def test_full_pipeline_offline_builds_warehouse():
                 "SELECT survival_rate FROM mart_survival_curve ORDER BY month"
             ).fetchall()
         ]
-        assert all(a >= b - 1e-9 for a, b in zip(rates, rates[1:]))
+        assert all(a >= b - 1e-9 for a, b in pairwise(rates))
     finally:
         con.close()

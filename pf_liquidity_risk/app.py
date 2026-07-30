@@ -392,11 +392,11 @@ def create_outcome_chart(df: pd.DataFrame, lang: str) -> go.Figure:
         title=t("outcome_dist", lang),
         xaxis_title="Outcome",
         yaxis_title=t("frequency", lang),
-        yaxis=dict(range=[0, max_val * 1.2]),
+        yaxis={"range": [0, max_val * 1.2]},
         height=400,
         showlegend=False,
         hovermode="x",
-        margin=dict(t=60),
+        margin={"t": 60},
     )
 
     return fig
@@ -415,7 +415,7 @@ def create_irr_histogram(df: pd.DataFrame, lang: str) -> go.Figure:
             x=0.5,
             y=0.5,
             showarrow=False,
-            font=dict(size=16),
+            font={"size": 16},
         )
         return fig
 
@@ -479,7 +479,7 @@ def create_survival_curve(df: pd.DataFrame, lang: str, max_month: int = 36) -> g
             y=survival_rates,
             mode="lines+markers",
             name=t("survival_rate", lang),
-            line=dict(color="#8E44AD", width=3),
+            line={"color": "#8E44AD", "width": 3},
             fill="tozeroy",
             fillcolor="rgba(142, 68, 173, 0.3)",
         )
@@ -517,7 +517,7 @@ def create_exit_multiple_chart(df: pd.DataFrame, lang: str) -> go.Figure:
             x=0.5,
             y=0.5,
             showarrow=False,
-            font=dict(size=16),
+            font={"size": 16},
         )
         return fig
 
@@ -577,7 +577,7 @@ def main():
         st.session_state["run_sim"] = False
 
     # Language Toggle at the top
-    col_lang1, col_lang2, col_lang3 = st.columns([6, 1, 1])
+    _col_lang1, col_lang2, col_lang3 = st.columns([6, 1, 1])
     with col_lang2:
         if st.button(
             "🇺🇸 EN",
@@ -961,7 +961,7 @@ def main():
         var_95 = loss_metrics["var_95_pct"]
 
         # Base case management buttons
-        col_base1, col_base2, col_base3 = st.columns([2, 1, 1])
+        _col_base1, col_base2, col_base3 = st.columns([2, 1, 1])
         with col_base2:
             if st.button(
                 "📌 " + t("set_base", lang),

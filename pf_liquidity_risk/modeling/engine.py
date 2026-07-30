@@ -1,5 +1,3 @@
-from typing import Dict, List
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -42,10 +40,10 @@ class PFInvestmentModel:
         """Cap annualized NOI; a non-positive NOI cannot imply a negative value."""
         return max(0.0, monthly_noi * 12 / self.cfg.cap_rate)
 
-    def simulate_path(self) -> Dict:
+    def simulate_path(self) -> dict:
         equity = self.cfg.initial_equity
         principal = self.cfg.senior_loan
-        noi_history: List[float] = []
+        noi_history: list[float] = []
 
         principal_at_refi = 0.0
         refi_loan_amount = 0.0
@@ -218,7 +216,7 @@ def plot_enhanced_results(df: pd.DataFrame, iterations: int, config: PFConfig, f
     Uses semantic color mapping for project status.
     """
     plt.style.use("seaborn-v0_8-muted")
-    fig, axes = plt.subplots(2, 2, figsize=(18, 12))
+    _fig, axes = plt.subplots(2, 2, figsize=(18, 12))
     axes = axes.flatten()
 
     # Semantic Color Map for professional risk reporting
@@ -333,7 +331,7 @@ def print_summary_table(df: pd.DataFrame, config: PFConfig):
         prob = count / len(df) * 100
         print(f"  {status:20s}: {prob:>6.2f}% ({count:>6,} cases)")
 
-    print("\n[Return Metrics - Exit Cases Only (n={:,})]".format(len(exit_df)))
+    print(f"\n[Return Metrics - Exit Cases Only (n={len(exit_df):,})]")
     print("-" * 70)
     if not exit_df.empty:
         print(f"  Mean IRR             : {exit_df['irr'].mean():>8.2%}")

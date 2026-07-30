@@ -5,7 +5,7 @@ pandas
 pip
 pytest
 python-dotenv
-ruff
+ruff==0.16.0
 tqdm
 typer
 # >=1.49 required: app uses the `width="stretch"` API (replaces use_container_width)

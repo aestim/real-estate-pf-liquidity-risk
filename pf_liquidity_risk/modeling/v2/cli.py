@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import pandas as pd
 import typer
@@ -33,11 +33,13 @@ def _print_json(payload: dict[str, Any]) -> None:
 
 @app.command("base")
 def base_case(
-    ledger_output: Path | None = typer.Option(
-        None,
-        "--ledger-output",
-        help="Optional path for the monthly integrated ledger CSV.",
-    ),
+    ledger_output: Annotated[
+        Path | None,
+        typer.Option(
+            "--ledger-output",
+            help="Optional path for the monthly integrated ledger CSV.",
+        ),
+    ] = None,
 ) -> None:
     """Run the deterministic V2 base case."""
 
@@ -67,20 +69,24 @@ def base_case(
 
 @app.command("simulate")
 def simulate(
-    iterations: int = typer.Option(
-        1_000,
-        "--iterations",
-        "-n",
-        min=1,
-        help="Number of scenario paths.",
-    ),
-    seed: int = typer.Option(42, "--seed", help="Random seed."),
-    output: Path | None = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Optional path for scenario-level CSV results.",
-    ),
+    iterations: Annotated[
+        int,
+        typer.Option(
+            "--iterations",
+            "-n",
+            min=1,
+            help="Number of scenario paths.",
+        ),
+    ] = 1_000,
+    seed: Annotated[int, typer.Option("--seed", help="Random seed.")] = 42,
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Optional path for scenario-level CSV results.",
+        ),
+    ] = None,
 ) -> None:
     """Run regime-correlated V2 Monte Carlo scenarios."""
 

@@ -88,7 +88,12 @@ def extract(offline: bool = False) -> pd.DataFrame:
     else:
         try:
             df = _from_ecos(config.ECOS_API_KEY)
-        except Exception as exc:  # network/parse/auth errors -> deterministic fallback
+        except (
+            requests.RequestException,
+            KeyError,
+            TypeError,
+            ValueError,
+        ) as exc:
             logger.warning("Live ECOS fetch failed ({}); using sample data.", exc)
             df = _from_sample()
 

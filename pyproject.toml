@@ -22,6 +22,7 @@ requires-python = "~=3.10.0"
 line-length = 99
 src = ["pf_liquidity_risk"]
 include = ["pyproject.toml", "pf_liquidity_risk/**/*.py", "pipeline/**/*.py", "tests/**/*.py"]
+required-version = "==0.16.0"
 
 [tool.ruff.lint]
 extend-select = ["I"]  # Add import sorting
@@ -29,4 +30,3 @@ extend-select = ["I"]  # Add import sorting
 [tool.ruff.lint.isort]
 known-first-party = ["pf_liquidity_risk", "pipeline"]
 force-sort-within-sections = true
-
